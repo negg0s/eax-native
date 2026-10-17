@@ -37,6 +37,7 @@ struct eax_buffer_s {
 
     // Sample data buffer (backed by pre-allocated arena)
     eax::CircularSampleBuffer sample_buffer{};
+    bool owns_arena_memory{false};
 
     // DirectSound3D parameters with lock-free SeqLock for RT tearing-free snapshot reads
     eax::SeqLock ds3d_seqlock{};
