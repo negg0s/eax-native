@@ -55,7 +55,6 @@ void eax_buffer_s::reset() noexcept {
     ds3d.dwSize = sizeof(eax_ds3dbuffer_t);
     ds3d.flMinDistance = 1.0f;
     ds3d.flMaxDistance = 1000.0f;
-    ds3d.flRolloffFactor = 1.0f;
     ds3d.dwInsideConeAngle = 360;
     ds3d.dwOutsideConeAngle = 360;
     ds3d.dwMode = EAX_DS3DMODE_NORMAL;
@@ -113,7 +112,8 @@ void eax_buffer_s::sync_to_openal() noexcept {
 
         alSourcef(al_source, AL_REFERENCE_DISTANCE, ds3d.flMinDistance);
         alSourcef(al_source, AL_MAX_DISTANCE, ds3d.flMaxDistance);
-        alSourcef(al_source, AL_ROLLOFF_FACTOR, ds3d.flRolloffFactor);
+        const float rolloff = context ? context->listener.flRolloffFactor : 1.0f;
+        alSourcef(al_source, AL_ROLLOFF_FACTOR, rolloff);
 
         alSourcef(al_source, AL_CONE_INNER_ANGLE, static_cast<float>(ds3d.dwInsideConeAngle));
         alSourcef(al_source, AL_CONE_OUTER_ANGLE, static_cast<float>(ds3d.dwOutsideConeAngle));

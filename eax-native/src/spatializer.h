@@ -151,7 +151,7 @@ public:
         const float dist = std::sqrt(rel_x * rel_x + rel_y * rel_y + rel_z * rel_z);
         gains.distance_gain = calculate_distance_attenuation(
             dist, buffer.flMinDistance, buffer.flMaxDistance,
-            buffer.flRolloffFactor * listener.flRolloffFactor,
+            listener.flRolloffFactor,
             listener.flDistanceFactor);
 
         gains.cone_gain = calculate_cone_attenuation(
