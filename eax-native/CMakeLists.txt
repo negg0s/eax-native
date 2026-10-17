@@ -6,11 +6,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Strict warning flags per specification
+# Warning options applied per-target to prevent poisoning third_party subprojects
+set(EAX_COMPILE_OPTIONS "")
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    add_compile_options(-Wall -Wextra -Werror -pedantic)
+    set(EAX_COMPILE_OPTIONS -Wall -Wextra -Werror -pedantic)
 elseif(MSVC)
-    add_compile_options(/W4 /WX /permissive-)
+    set(EAX_COMPILE_OPTIONS /W4 /WX /permissive-)
 endif()
 
 # Build options
@@ -64,6 +65,10 @@ target_compile_definitions(eax-native
         EAX_NATIVE_BUILD_SHARED
 )
 
+if(EAX_COMPILE_OPTIONS)
+    target_compile_options(eax-native PRIVATE ${EAX_COMPILE_OPTIONS})
+endif()
+
 # Demo executable
 if(EAX_BUILD_DEMO)
     add_executable(eax_demo
@@ -75,6 +80,9 @@ if(EAX_BUILD_DEMO)
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${OPENAL_INCLUDE_DIRS}
     )
+    if(EAX_COMPILE_OPTIONS)
+        target_compile_options(eax_demo PRIVATE ${EAX_COMPILE_OPTIONS})
+    endif()
 endif()
 
 # Test suite with Catch2
@@ -100,6 +108,10 @@ if(EAX_BUILD_TESTS)
     )
 
     target_link_libraries(eax_tests PRIVATE eax-native)
+
+    if(EAX_COMPILE_OPTIONS)
+        target_compile_options(eax_tests PRIVATE ${EAX_COMPILE_OPTIONS})
+    endif()
 
     # Disable pedantic errors on external test framework code if necessary
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
