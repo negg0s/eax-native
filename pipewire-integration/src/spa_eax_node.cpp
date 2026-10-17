@@ -1,3 +1,16 @@
+/**
+ * @file spa_eax_node.cpp
+ * @brief EXPERIMENTAL SCAFFOLD: SPA (Simple Plugin Architecture) module plugin.
+ *
+ * NOTE: This SPA node module (libspa-eax-filter.so) is an experimental architectural
+ * scaffold for factory enumeration (audio.filter.eax) and interface validation.
+ * Full in-graph port negotiation (SPA_PARAM_PortConfig) and buffer exchange are
+ * scheduled for completion in Phase 4.
+ *
+ * For real-time audio routing and gaming integration in Phase 3, use the primary
+ * eax_pipewire_filter_s API (eax_pipewire_filter.cpp) which integrates via pw_filter.
+ */
+
 #include <spa/support/plugin.h>
 #include <spa/node/node.h>
 #include <spa/node/io.h>

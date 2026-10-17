@@ -59,6 +59,11 @@ target_link_libraries(spa-eax-filter
         ${PIPEWIRE_LIBRARIES}
 )
 
+set_target_properties(spa-eax-filter PROPERTIES
+    BUILD_RPATH "$ORIGIN/../eax-native:$ORIGIN"
+    INSTALL_RPATH "$ORIGIN/../eax-native:$ORIGIN"
+)
+
 target_compile_options(spa-eax-filter PRIVATE ${PIPEWIRE_CFLAGS_OTHER})
 if(PW_COMPILE_OPTIONS)
     target_compile_options(spa-eax-filter PRIVATE ${PW_COMPILE_OPTIONS})

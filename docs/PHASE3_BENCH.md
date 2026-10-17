@@ -7,7 +7,7 @@ This report documents the empirical latency, CPU utilization, and real-time safe
 The evaluation compares:
 1. **Wine Builtin DirectSound (`dsound.dll`)**: Legacy MMDevAPI / ALSA / PulseAudio bridge with multiple buffering stages and cross-process message pumping.
 2. **Native EAX + OpenAL Soft**: Direct hardware-accelerated 3D spatialization with EFX `AL_EFFECT_EAXREVERB` outputting via OpenAL Soft.
-3. **Native EAX + PipeWire DSP**: Real-time Simple Plugin Architecture (SPA) node and `pw_filter` client integrating `libeax-native.so` into the native Linux audio server graph.
+3. **Native EAX + PipeWire DSP**: Real-time PipeWire filter client (`pw_filter`) integrating `libeax-native.so` into the Linux audio server graph (an accompanying SPA plugin `libspa-eax-filter.so` is included as an experimental scaffold for factory discovery, pending full in-graph port negotiation in Phase 4).
 
 All exit criteria defined in [`docs/ROADMAP.md`](../docs/ROADMAP.md) lines 41-58 have been satisfied:
 - `eaxctl demo --backend pipewire` successfully executes real-time 3D fly-by with HRTF spatialization and EAX reverb.
@@ -113,4 +113,4 @@ Empirical validation on physical gaming hardware can be documented using the tem
 
 ## 7. Conclusion
 
-Phase 3 implementation satisfies all real-time requirements, integrates cleanly into PipeWire through both `pw_filter` and standard SPA node abstractions, and delivers ultra-low round-trip latency (< 11 ms) with deterministic real-time safety.
+Phase 3 implementation satisfies all real-time requirements, integrates cleanly into PipeWire through the `pw_filter` DSP client (with an experimental SPA plugin module scaffold for factory discovery, pending Phase 4 for full graph port configuration), and demonstrates low round-trip latency (< 11 ms modeled) with deterministic real-time safety.

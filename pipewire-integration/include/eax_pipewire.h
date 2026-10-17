@@ -73,6 +73,13 @@ EAX_API int eax_pipewire_filter_process_block(
  */
 EAX_API void eax_pipewire_filter_destroy(eax_pipewire_filter_t* filter);
 
+/**
+ * Note on libspa-eax-filter.so:
+ * The accompanying SPA module is an experimental architectural scaffold for factory
+ * enumeration ("audio.filter.eax"). Full in-graph port negotiation (SPA_PARAM_PortConfig)
+ * is scheduled for Phase 4. The primary production PipeWire interface is eax_pipewire_filter_*.
+ */
+
 #ifdef __cplusplus
 }
 #endif
