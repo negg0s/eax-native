@@ -1,0 +1,53 @@
+name: Build and Test EAX Native
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  arch-multiprofile:
+    name: Arch Linux (${{ matrix.compiler }})
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [clang, gcc]
+        include:
+          - compiler: clang
+            c_compiler: clang
+            cxx_compiler: clang++
+          - compiler: gcc
+            c_compiler: gcc
+            cxx_compiler: g++
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --needed --noconfirm base-devel git cmake clang gcc openal catch2
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -S eax-native \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }} \
+            -DEAX_BUILD_TESTS=ON \
+            -DEAX_BUILD_DEMO=ON
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Run Unit Tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Run 3D Fly-By Demo
+        run: ./build/eax_demo test_output_demo.wav

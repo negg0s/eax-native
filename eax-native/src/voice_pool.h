@@ -1,0 +1,65 @@
+#ifndef EAX_NATIVE_VOICE_POOL_H
+#define EAX_NATIVE_VOICE_POOL_H
+
+#include <cstdint>
+#include <atomic>
+#include <array>
+#include "eax_native_abi.h"
+#include "arena.h"
+
+struct eax_buffer_s {
+    std::atomic<bool> in_use{false};
+    uint32_t id{0};
+
+    eax_dsbcaps_t caps{};
+    eax_waveformat_ex_t format{};
+
+    // Volume, Pan, Frequency
+    std::atomic<int32_t> volume_mb{0};
+    std::atomic<int32_t> pan_mb{0};
+    std::atomic<uint32_t> frequency_hz{44100};
+
+    // Playback state
+    std::atomic<uint32_t> status{0};
+    std::atomic<bool> is_looping{false};
+    std::atomic<double> playback_cursor{0.0};
+
+    // Sample data buffer (backed by pre-allocated arena)
+    eax::CircularSampleBuffer sample_buffer{};
+
+    // DirectSound3D parameters
+    eax_ds3dbuffer_t ds3d{};
+    eax_ds3dbuffer_t ds3d_deferred{};
+    bool ds3d_has_deferred{false};
+
+    // EAX 2.0 buffer properties
+    eax20_buffer_properties_t eax20{};
+    eax20_buffer_properties_t eax20_deferred{};
+    bool eax20_has_deferred{false};
+
+    void reset() noexcept;
+    void read_samples(float* out_left, float* out_right, size_t frame_count, uint32_t output_sample_rate) noexcept;
+};
+
+namespace eax {
+
+class VoicePool {
+public:
+    static constexpr size_t MAX_VOICES = 64;
+
+    VoicePool() noexcept;
+    ~VoicePool() noexcept = default;
+
+    [[nodiscard]] eax_buffer_s* allocate_voice() noexcept;
+    void release_voice(eax_buffer_s* voice) noexcept;
+
+    [[nodiscard]] size_t active_voice_count() const noexcept;
+    [[nodiscard]] std::array<eax_buffer_s, MAX_VOICES>& get_all_voices() noexcept { return m_voices; }
+
+private:
+    std::array<eax_buffer_s, MAX_VOICES> m_voices;
+};
+
+} // namespace eax
+
+#endif // EAX_NATIVE_VOICE_POOL_H
