@@ -18,7 +18,6 @@ BENCH_BIN=""
 CANDIDATE_PATHS=(
     "${BUILD_DIR}/tools/eaxctl/eax_latency_bench"
     "${BUILD_DIR}/eax_latency_bench"
-    "${REPO_ROOT}/build-native/tools/eaxctl/eax_latency_bench"
 )
 
 for cand in "${CANDIDATE_PATHS[@]}"; do
@@ -41,14 +40,11 @@ if [[ ! -x "${BENCH_BIN}" ]]; then
 fi
 
 echo "[*] Executing latency benchmark probe: ${BENCH_BIN}"
-"${BENCH_BIN}"
-
-BENCH_STATUS=$?
-if [[ ${BENCH_STATUS} -eq 0 ]]; then
+if ! "${BENCH_BIN}"; then
     echo ""
-    echo "[+] SUCCESS: Phase 3 latency benchmark passed all assertions (< 40ms round-trip)."
-else
-    echo ""
-    echo "[-] FAILURE: Phase 3 latency benchmark failed with exit code ${BENCH_STATUS}."
-    exit ${BENCH_STATUS}
+    echo "[-] FAILURE: Phase 3 latency benchmark execution failed."
+    exit 1
 fi
+
+echo ""
+echo "[+] SUCCESS: Phase 3 latency benchmark passed all assertions (< 40ms round-trip)."

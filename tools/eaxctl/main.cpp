@@ -361,14 +361,16 @@ int cmd_demo(const std::string& backend, float duration, bool headless, const st
 
         eax_buffer_set_3d_position(buf, x, y, z, EAX_DS3D_IMMEDIATE);
 
-        if (!headless) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        }
-
         if (!output_wav.empty()) {
             float block[512 * 2];
             eax_context_render_offline(ctx, block, 512, sample_rate);
             recorded_pcm.insert(recorded_pcm.end(), block, block + 512 * 2);
+        }
+
+        if (!headless || !output_wav.empty()) {
+            // Pace to real-time audio block duration (~10.67ms per 512 frames @ 48kHz)
+            // to maintain proper WAV playback timing without CPU spin inflation
+            std::this_thread::sleep_for(std::chrono::microseconds(512 * 1000000 / sample_rate));
         }
     }
 
