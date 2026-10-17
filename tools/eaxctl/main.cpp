@@ -88,7 +88,6 @@ int cmd_install(const std::string& appid, const std::string& explicit_prefix) {
         fs::create_directories(syswow64);
     }
 
-    // Locate built dsound.dll shim
     std::vector<fs::path> shim_locations = {
         "./prebuilt/pe64/dsound.dll",
         "./prebuilt/pe32/dsound.dll",
@@ -328,7 +327,6 @@ int cmd_demo(const std::string& backend, float duration, bool headless, const st
         }
     }
 
-    // Configure EAX Environment to REVERB_CAVE
     std::cout << "[*] Configuring EAX 2.0 preset: REVERB_CAVE (decay = 2.91s)...\n";
     eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 1, nullptr, 0, &eax::PRESET_CAVE, sizeof(eax::PRESET_CAVE));
 

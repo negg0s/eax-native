@@ -59,11 +59,9 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Configure EAX Environment to REVERB_CAVE using named constants from eax_reverb.h
     std::cout << "[*] Configuring OpenAL Soft EAX 2.0 preset: REVERB_CAVE (decay = 2.91s)...\n";
     eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 1, nullptr, 0, &eax::PRESET_CAVE, sizeof(eax::PRESET_CAVE));
 
-    // Create 3D Sound Buffer
     const uint32_t sample_rate = 44100;
     const float duration_sec = 0.5f;
     const size_t tone_frames = static_cast<size_t>(sample_rate * duration_sec);
@@ -90,7 +88,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Fill buffer with 440 Hz tone pulse
     void *p1 = nullptr, *p2 = nullptr;
     uint32_t b1 = 0, b2 = 0;
     eax_buffer_lock(buf, 0, static_cast<uint32_t>(buffer_bytes), &p1, &b1, &p2, &b2, 0);
@@ -108,7 +105,6 @@ int main(int argc, char** argv) {
     std::cout << "[*] Playing 3D fly-by sound through OpenAL audio device in real time...\n";
     std::cout << "[*] Trajectory: (-20m, 0m, 5m) -> (+20m, 0m, 5m). Listen for stereo panning and cave reverb!\n";
 
-    // Start playback through OpenAL device
     eax_buffer_play(buf, 0, EAX_DSBPLAY_LOOPING);
 
     const auto start_time = std::chrono::steady_clock::now();

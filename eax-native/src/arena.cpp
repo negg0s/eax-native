@@ -72,7 +72,6 @@ void* MemoryArena::allocate(size_t bytes, size_t alignment) noexcept {
 
     size_t current = m_offset.load(std::memory_order_relaxed);
     while (true) {
-        // Calculate aligned position
         const size_t remainder = current % alignment;
         const size_t padding = (remainder == 0) ? 0 : (alignment - remainder);
         const size_t aligned_offset = current + padding;

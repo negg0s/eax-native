@@ -102,7 +102,6 @@ EAX_API eax_pipewire_filter_t* eax_pipewire_filter_create(
     uint32_t sample_rate,
     uint32_t channels
 ) {
-    // PipeWire EAX filter strictly requires 2 channels (stereo). Reject non-stereo requests.
     if (channels != 2) {
         return nullptr;
     }

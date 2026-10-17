@@ -25,7 +25,6 @@ TEST_CASE("EAX Reverb Tail: REVERB_CAVE Preset Extended Decay via OpenAL Soft", 
     REQUIRE(ctx->m_is_loopback);
     REQUIRE(eax::get_al_ext().alcRenderSamplesSOFT != nullptr);
 
-    // Verify OpenAL Soft EFX auxiliary slot and effect handles are allocated
     auto& ext = eax::get_al_ext();
     if (ext.has_efx) {
         REQUIRE(ctx->m_eax_slot != 0);
@@ -53,7 +52,6 @@ TEST_CASE("EAX Reverb Tail: REVERB_CAVE Preset Extended Decay via OpenAL Soft", 
     eax_buffer_h buf = nullptr;
     REQUIRE(eax_buffer_create(ctx, &caps, &format, &buf) == EAX_OK);
 
-    // Fill buffer with 1 kHz burst
     void *p1 = nullptr, *p2 = nullptr;
     uint32_t b1 = 0, b2 = 0;
     REQUIRE(eax_buffer_lock(buf, 0, static_cast<uint32_t>(buffer_bytes), &p1, &b1, &p2, &b2, 0) == EAX_OK);
@@ -64,7 +62,6 @@ TEST_CASE("EAX Reverb Tail: REVERB_CAVE Preset Extended Decay via OpenAL Soft", 
     }
     REQUIRE(eax_buffer_unlock(buf, p1, b1, p2, b2) == EAX_OK);
 
-    // Configure EAX REVERB_CAVE preset (2.91s decay time) using named constants from eax_reverb.h
     REQUIRE(eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 1, nullptr, 0, &eax::PRESET_CAVE, sizeof(eax::PRESET_CAVE)) == EAX_OK);
 
     // Play once (non-looping), so dry sound terminates after 30 ms
@@ -82,7 +79,6 @@ TEST_CASE("EAX Reverb Tail: REVERB_CAVE Preset Extended Decay via OpenAL Soft", 
     const float cave_tail_rms = calculate_rms_slice(pcm_with_reverb.data(), tail_start_frame, tail_frame_count);
 
     REQUIRE(burst_rms > 0.1f);
-    // Assert extended audible reverb tail is present
     REQUIRE(cave_tail_rms > 0.001f);
 
     // Contrast with disabled reverb (dry room: lRoom = -10000 mB)

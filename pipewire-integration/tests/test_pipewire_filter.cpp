@@ -17,10 +17,8 @@ int main() {
         return 1;
     }
 
-    // Set CAVE preset
     eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 0, nullptr, 0, &eax::PRESET_CAVE, sizeof(eax::PRESET_CAVE));
 
-    // Create 3D buffer
     eax_dsbcaps_t caps{};
     caps.dwSize = sizeof(eax_dsbcaps_t);
     caps.dwFlags = EAX_DSBCAPS_CTRL3D | EAX_DSBCAPS_CTRLVOLUME;
@@ -41,7 +39,6 @@ int main() {
         return 1;
     }
 
-    // Fill sine wave
     void *p1 = nullptr, *p2 = nullptr;
     uint32_t b1 = 0, b2 = 0;
     eax_buffer_lock(buf, 0, caps.dwBufferBytes, &p1, &b1, &p2, &b2, 0);
@@ -56,7 +53,6 @@ int main() {
     eax_buffer_set_3d_position(buf, -5.0f, 0.0f, 1.0f, EAX_DS3D_IMMEDIATE);
     eax_buffer_play(buf, 0, EAX_DSBPLAY_LOOPING);
 
-    // Create PipeWire filter node
     eax_pipewire_filter_t* pw_filter = eax_pipewire_filter_create(ctx, "test-eax-filter", 48000, 2);
     if (!pw_filter) {
         std::cerr << "[-] Failed to create PipeWire filter!\n";
@@ -65,7 +61,6 @@ int main() {
         return 1;
     }
 
-    // Test real-time process block
     const size_t frames = 512;
     std::vector<float> out_stereo(frames * 2, 0.0f);
     int res = eax_pipewire_filter_process_block(pw_filter, nullptr, out_stereo.data(), frames);
@@ -74,7 +69,6 @@ int main() {
         return 1;
     }
 
-    // Check non-zero output rendered
     float sum_abs = 0.0f;
     for (float sample : out_stereo) {
         sum_abs += std::abs(sample);
@@ -82,12 +76,10 @@ int main() {
     std::cout << "[pipewire-test] Rendered 512 frames, sum_abs = " << sum_abs << "\n";
     assert(sum_abs > 0.001f);
 
-    // Test start & stop
     eax_pipewire_filter_start(pw_filter);
     std::cout << "[pipewire-test] Filter running (connected = " << eax_pipewire_filter_is_connected(pw_filter) << ")\n";
     eax_pipewire_filter_stop(pw_filter);
 
-    // Test SPA factory enum
     const struct spa_handle_factory* factory = nullptr;
     uint32_t index = 0;
     int enum_res = spa_handle_factory_enum(&factory, &index);

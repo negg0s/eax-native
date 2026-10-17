@@ -1,2 +1,62 @@
-# Ignore third-party reference sources
+# Third-party reference sources with external licenses
 eax-native/third_party/
+
+# Build outputs
+build/
+build-*/
+out/
+dist/
+
+# CMake artifacts
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+cmake_install.cmake
+install_manifest.txt
+DartConfiguration.tcl
+Testing/
+compile_commands.json
+
+# Compiler output patterns
+*.o
+*.obj
+*.pdb
+*.ilk
+
+# ELF shared objects and import libraries (PE dsound.dll shims in prebuilt/ are tracked)
+*.so
+*.dylib
+*.dll.lib
+
+# Windows PE auxiliary files produced by build (keep prebuilt/)
+*.obj
+*.exe
+*.lib
+*.a
+
+# Test and benchmark outputs
+*.log
+gain_contrast_*.dat
+*.wav
+*_rendered.pcm
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Environment and secrets
+.env
+.env.*
+*.local
+
+# OS and editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Agent workspace journal
+REVIEW_NOTES.md

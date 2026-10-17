@@ -77,7 +77,7 @@ Every DirectSound and EAX method called by games maps to a corresponding functio
 | `GetVolume` | `eax_buf_get_volume` | Returns stored millibel attenuation | Cached attenuation ($0\text{ to }-10000\text{ mB}$). |
 | `SetVolume` | `eax_buf_set_volume` | `alSourcefDirect(..., AL_GAIN, gain)` | Millibels converted to linear gain ($10^{mB/2000}$). |
 | `GetPan` | `eax_buf_get_pan` | Returns stored stereo pan ($mPan$, range $-10000\text{ to }+10000\text{ mB}$) | Cached DirectSound millibel pan. |
-| `SetPan` | `eax_buf_set_pan` | `alSourceiDirect(..., AL_PANNING_ENABLED_SOFT, AL_TRUE)`, `alSourcefDirect(..., AL_PAN_SOFT, panf)` | Non-3D buffers only (`dsoal/src/buffer.cpp:672–675`): `panf = (pan <= 0) ? (mB_to_gain(pan) - 1.0f) : (1.0f - mB_to_gain(-pan))`, where $mB\_to\_gain(x) = 10^{x/2000}$. Does NOT touch `AL_POSITION`. Volume remains mapped via `AL_GAIN` (`buffer.cpp:623`). |
+| `SetPan` | `eax_buf_set_pan` | `alSourceiDirect(..., AL_PANNING_ENABLED_SOFT, AL_TRUE)`, `alSourcefDirect(..., AL_PAN_SOFT, panf)` | Non-3D buffers only (`dsoal/src/buffer.cpp:672-675`): `panf = (pan <= 0) ? (mB_to_gain(pan) - 1.0f) : (1.0f - mB_to_gain(-pan))`, where $mB\_to\_gain(x) = 10^{x/2000}$. Does NOT touch `AL_POSITION`. Volume remains mapped via `AL_GAIN` (`buffer.cpp:623`). |
 | `GetFrequency` | `eax_buf_get_frequency` | Returns sample rate in Hz | Cached value. |
 | `SetFrequency` | `eax_buf_set_frequency` | `alSourcefDirect(..., AL_PITCH, freq / base_freq)` | Pitch shifting calculated relative to original rate. |
 | `GetStatus` | `eax_buf_get_status` | `alGetSourceiDirect(..., AL_SOURCE_STATE, ...)` | Returns `DSBSTATUS_PLAYING`, `DSBSTATUS_LOOPING`. |

@@ -82,11 +82,9 @@ TEST_CASE("RT Safety: Zero dynamic memory allocation on audio rendering thread",
     eax_context_h ctx = nullptr;
     REQUIRE(eax_context_create_offline(&ctx, 48000) == EAX_OK);
 
-    // Configure EAX preset
     REQUIRE(eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 1, nullptr, 0,
                          &eax::PRESET_CAVE, sizeof(eax::PRESET_CAVE)) == EAX_OK);
 
-    // Create 3D voice buffer
     const uint32_t sample_rate = 48000;
     const uint32_t buffer_bytes = sample_rate * sizeof(int16_t); // 1s mono
 
@@ -106,7 +104,6 @@ TEST_CASE("RT Safety: Zero dynamic memory allocation on audio rendering thread",
     eax_buffer_h buf = nullptr;
     REQUIRE(eax_buffer_create(ctx, &caps, &format, &buf) == EAX_OK);
 
-    // Fill buffer once in preparation
     void *p1 = nullptr, *p2 = nullptr;
     uint32_t b1 = 0, b2 = 0;
     REQUIRE(eax_buffer_lock(buf, 0, buffer_bytes, &p1, &b1, &p2, &b2, 0) == EAX_OK);
@@ -131,17 +128,14 @@ TEST_CASE("RT Safety: Zero dynamic memory allocation on audio rendering thread",
         g_rt_thread_active = true;
 
         for (int iter = 0; iter < 1000; ++iter) {
-            // 1. Real-time parameter modulation
             const float angle = iter * 0.05f;
             eax_buffer_set_3d_position(buf, std::cos(angle) * 5.0f, 0.0f, std::sin(angle) * 5.0f, EAX_DS3D_IMMEDIATE);
             eax_buffer_set_volume(buf, -iter % 600);
             eax_buffer_set_pan(buf, (iter % 200) - 100);
 
-            // 2. Real-time listener updates
             eax_listener_set_position(ctx, 0.0f, 0.0f, 0.0f, EAX_DS3D_DEFERRED);
             eax_listener_commit_deferred(ctx);
 
-            // 3. Real-time audio rendering (DSP mixer cycle)
             eax_context_render_offline(ctx, rt_output, RENDER_FRAMES, sample_rate);
         }
 

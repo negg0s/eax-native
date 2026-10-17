@@ -48,7 +48,6 @@ TEST_CASE("3D Spatial Panning RMS: 1 kHz Sine Left/Right Ratio via OpenAL Soft",
     REQUIRE(buf->al_source != 0);
     REQUIRE(buf->al_buffer != 0);
 
-    // Fill buffer with pure 1 kHz sine wave
     void *p1 = nullptr, *p2 = nullptr;
     uint32_t b1 = 0, b2 = 0;
     REQUIRE(eax_buffer_lock(buf, 0, static_cast<uint32_t>(buffer_bytes), &p1, &b1, &p2, &b2, 0) == EAX_OK);
@@ -71,7 +70,6 @@ TEST_CASE("3D Spatial Panning RMS: 1 kHz Sine Left/Right Ratio via OpenAL Soft",
     SECTION("Position Full Left (-10, 0, 0): OpenAL source pos and RMS L >> RMS R") {
         REQUIRE(eax_buffer_set_3d_position(buf, -10.0f, 0.0f, 0.0f, EAX_DS3D_IMMEDIATE) == EAX_OK);
 
-        // Verify OpenAL source position matches
         float al_pos[3] = { 0.0f };
         alGetSource3f(buf->al_source, AL_POSITION, &al_pos[0], &al_pos[1], &al_pos[2]);
         REQUIRE(al_pos[0] == Catch::Approx(-10.0f));

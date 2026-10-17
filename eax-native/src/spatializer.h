@@ -92,7 +92,6 @@ public:
         const float to_lis_y = dy / dist;
         const float to_lis_z = dz / dist;
 
-        // Normalize cone direction
         const float c_len = std::sqrt(cone_dir.x * cone_dir.x + cone_dir.y * cone_dir.y + cone_dir.z * cone_dir.z);
         if (c_len <= 0.0001f) {
             return 1.0f;

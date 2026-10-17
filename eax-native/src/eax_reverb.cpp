@@ -63,7 +63,6 @@ void ReverbDSP::process(float input_mono, float& out_left, float& out_right) noe
         return;
     }
 
-    // Read delayed sample from predelay buffer
     const float delayed_input = m_predelay_buffer[m_predelay_idx];
     m_predelay_buffer[m_predelay_idx] = input_mono;
     m_predelay_idx = (m_predelay_idx + 1) % m_predelay_buffer.size();

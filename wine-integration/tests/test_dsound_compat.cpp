@@ -146,7 +146,6 @@ int main() {
     }
     printf("[wine_dsound_test] IKsPropertySet::QuerySupport(GUID_EAX20_Buffer): OK (support=0x%08X)\n", (unsigned int)support);
 
-    // Release resources
     bufProp->lpVtbl->Release(bufProp);
     ds3dBuf->lpVtbl->Release(ds3dBuf);
     reinterpret_cast<IDirectSoundBuffer8*>(dsBuf)->lpVtbl->Release(reinterpret_cast<IDirectSoundBuffer8*>(dsBuf));

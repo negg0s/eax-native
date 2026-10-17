@@ -427,7 +427,6 @@ static HRESULT DS_STDAPICALLTYPE Buf_SetFormat(IDirectSoundBuffer8* This, const 
         return E_FAIL;
     }
     if (!pcfxFormat) return DSERR_INVALIDPARAM;
-    // Primary buffer format reconfiguration: cache requested output format.
     // TODO: Dynamic hardware device rate/channel reconfiguration is Phase 3 scope.
     self->format = *pcfxFormat;
     return S_OK;
@@ -914,7 +913,6 @@ DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE DirectSoundEnumerateW(LPDSENUMCALLBACKW 
 
 DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE GetDeviceID(const GUID* /*pGuidSrc*/, GUID* pGuidDst) {
     if (pGuidDst) {
-        // Return default DirectSound device ID
         static const GUID DSDEVID_DefaultPlayback = {
             0xDEF00000, 0x9C6D, 0x47ED, {0xAA, 0xF1, 0x4D, 0xDA, 0x8F, 0x2B, 0x5C, 0x03}
         };

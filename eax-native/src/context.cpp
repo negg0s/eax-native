@@ -33,7 +33,6 @@ void eax_context_s::init_openal(bool loopback, uint32_t loopback_sample_rate) no
     fallback_sample_rate = loopback_sample_rate ? loopback_sample_rate : 44100;
 
     if (loopback) {
-        // Try loopback device
         if (alcIsExtensionPresent(nullptr, "ALC_SOFT_loopback")) {
             ext.alcLoopbackOpenDeviceSOFT = reinterpret_cast<LPALCLOOPBACKOPENDEVICESOFT>(
                 alcGetProcAddress(nullptr, "alcLoopbackOpenDeviceSOFT"));
@@ -144,7 +143,6 @@ void eax_context_s::apply_eax_reverb_to_openal() noexcept {
     ext.alEffectf(m_eax_effect, AL_EAXREVERB_LATE_REVERB_DELAY, std::clamp(eax_listener.flReverbDelay, 0.0f, 0.1f));
     ext.alEffectf(m_eax_effect, AL_EAXREVERB_DIFFUSION, std::clamp(eax_listener.flEnvironmentDiffusion, 0.0f, 1.0f));
 
-    // Commit effect to auxiliary slot
     ext.alAuxiliaryEffectSloti(m_eax_slot, AL_EFFECTSLOT_EFFECT, static_cast<ALint>(m_eax_effect));
 }
 

@@ -291,7 +291,6 @@ EAX_API eax_result_t eax_buffer_duplicate(eax_context_h context, eax_buffer_h so
     voice->owns_arena_memory = (mem != nullptr);
     voice->init_openal(context);
 
-    // Share OpenAL buffer
     if (voice->al_source != 0 && source_buffer->al_buffer != 0) {
         alSourcei(voice->al_source, AL_BUFFER, static_cast<ALint>(source_buffer->al_buffer));
     }
@@ -323,7 +322,6 @@ EAX_API eax_result_t eax_buffer_lock(eax_buffer_h buffer, uint32_t offset, uint3
 
 EAX_API eax_result_t eax_buffer_unlock(eax_buffer_h buffer, void* /*ptr1*/, uint32_t /*bytes1*/, void* /*ptr2*/, uint32_t /*bytes2*/) {
     if (!buffer) return EAX_ERR_POINTER;
-    // Push PCM data to OpenAL buffer object
     buffer->upload_sample_data();
     buffer->sync_to_openal();
     return EAX_OK;
