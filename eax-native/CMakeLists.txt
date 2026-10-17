@@ -97,6 +97,7 @@ if(EAX_BUILD_TESTS)
         tests/test_spatial_pan_rms.cpp
         tests/test_eax_reverb.cpp
         tests/test_properties.cpp
+        tests/test_rt_safety.cpp
     )
 
     target_include_directories(eax_tests
@@ -107,7 +108,7 @@ if(EAX_BUILD_TESTS)
             ${OPENAL_INCLUDE_DIRS}
     )
 
-    target_link_libraries(eax_tests PRIVATE eax-native)
+    target_link_libraries(eax_tests PRIVATE eax-native ${CMAKE_DL_LIBS})
 
     if(EAX_COMPILE_OPTIONS)
         target_compile_options(eax_tests PRIVATE ${EAX_COMPILE_OPTIONS})

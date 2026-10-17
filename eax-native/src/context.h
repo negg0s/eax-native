@@ -35,6 +35,11 @@ struct eax_context_s {
     uint32_t speaker_config{EAX_SPEAKER_CONFIG_HEADPHONE};
     std::mutex config_mutex{};
 
+    static constexpr size_t SCRATCH_MAX_FRAMES = 4096;
+    float m_scratch_l[SCRATCH_MAX_FRAMES]{};
+    float m_scratch_r[SCRATCH_MAX_FRAMES]{};
+    float m_scratch_reverb[SCRATCH_MAX_FRAMES]{};
+
     explicit eax_context_s(bool loopback = false, uint32_t loopback_sample_rate = 44100) noexcept;
     ~eax_context_s() noexcept;
 

@@ -182,48 +182,53 @@ void eax_context_s::render_offline(float* out_stereo_pcm, size_t frame_count, ui
     }
 
     // Diagnostic fallback software mixing if loopback is unavailable
-    std::fill_n(out_stereo_pcm, frame_count * 2, 0.0f);
+    // Process in chunks of SCRATCH_MAX_FRAMES using preallocated member buffers (RT safe: zero malloc)
+    size_t frames_rendered = 0;
+    while (frames_rendered < frame_count) {
+        const size_t chunk = std::min(frame_count - frames_rendered, SCRATCH_MAX_FRAMES);
+        float* chunk_out = out_stereo_pcm + 2 * frames_rendered;
+        std::fill_n(chunk_out, chunk * 2, 0.0f);
+        std::fill_n(m_scratch_reverb, chunk, 0.0f);
 
-    std::vector<float> voice_l(frame_count, 0.0f);
-    std::vector<float> voice_r(frame_count, 0.0f);
-    std::vector<float> reverb_send(frame_count, 0.0f);
+        for (auto& voice : voice_pool.get_all_voices()) {
+            if (!voice.in_use.load(std::memory_order_relaxed)) continue;
+            if ((voice.status.load(std::memory_order_relaxed) & EAX_DSBSTATUS_PLAYING) == 0) continue;
 
-    for (auto& voice : voice_pool.get_all_voices()) {
-        if (!voice.in_use.load(std::memory_order_relaxed)) continue;
-        if ((voice.status.load(std::memory_order_relaxed) & EAX_DSBSTATUS_PLAYING) == 0) continue;
+            voice.read_samples(m_scratch_l, m_scratch_r, chunk, sample_rate);
 
-        voice.read_samples(voice_l.data(), voice_r.data(), frame_count, sample_rate);
+            const bool is_3d = (voice.caps.dwFlags & EAX_DSBCAPS_CTRL3D) != 0;
+            eax::SpatialGains gains;
+            float p_left = 1.0f;
+            float p_right = 1.0f;
 
-        const bool is_3d = (voice.caps.dwFlags & EAX_DSBCAPS_CTRL3D) != 0;
-        eax::SpatialGains gains;
-        float p_left = 1.0f;
-        float p_right = 1.0f;
+            if (is_3d) {
+                gains = eax::Spatializer::compute_gains(listener, voice.ds3d, voice.volume_mb.load(std::memory_order_relaxed));
+                p_left = gains.left_gain;
+                p_right = gains.right_gain;
+            } else {
+                const float vol = eax::mb_to_gain(voice.volume_mb.load(std::memory_order_relaxed));
+                const float pan = eax::calculate_panning_soft(voice.pan_mb.load(std::memory_order_relaxed));
+                p_left = vol * std::sqrt(0.5f * (1.0f - pan));
+                p_right = vol * std::sqrt(0.5f * (1.0f + pan));
+            }
 
-        if (is_3d) {
-            gains = eax::Spatializer::compute_gains(listener, voice.ds3d, voice.volume_mb.load(std::memory_order_relaxed));
-            p_left = gains.left_gain;
-            p_right = gains.right_gain;
-        } else {
-            const float vol = eax::mb_to_gain(voice.volume_mb.load(std::memory_order_relaxed));
-            const float pan = eax::calculate_panning_soft(voice.pan_mb.load(std::memory_order_relaxed));
-            p_left = vol * std::sqrt(0.5f * (1.0f - pan));
-            p_right = vol * std::sqrt(0.5f * (1.0f + pan));
+            for (size_t i = 0; i < chunk; ++i) {
+                const float sample_mono = 0.5f * (m_scratch_l[i] + m_scratch_r[i]);
+                chunk_out[2 * i] += m_scratch_l[i] * p_left;
+                chunk_out[2 * i + 1] += m_scratch_r[i] * p_right;
+                const float send_gain = is_3d ? gains.distance_gain : 1.0f;
+                m_scratch_reverb[i] += sample_mono * send_gain;
+            }
         }
 
-        for (size_t i = 0; i < frame_count; ++i) {
-            const float sample_mono = 0.5f * (voice_l[i] + voice_r[i]);
-            out_stereo_pcm[2 * i] += voice_l[i] * p_left;
-            out_stereo_pcm[2 * i + 1] += voice_r[i] * p_right;
-            const float send_gain = is_3d ? gains.distance_gain : 1.0f;
-            reverb_send[i] += sample_mono * send_gain;
+        for (size_t i = 0; i < chunk; ++i) {
+            float rev_l = 0.0f;
+            float rev_r = 0.0f;
+            fallback_reverb.process(m_scratch_reverb[i], rev_l, rev_r);
+            chunk_out[2 * i] += rev_l;
+            chunk_out[2 * i + 1] += rev_r;
         }
-    }
 
-    for (size_t i = 0; i < frame_count; ++i) {
-        float rev_l = 0.0f;
-        float rev_r = 0.0f;
-        fallback_reverb.process(reverb_send[i], rev_l, rev_r);
-        out_stereo_pcm[2 * i] += rev_l;
-        out_stereo_pcm[2 * i + 1] += rev_r;
+        frames_rendered += chunk;
     }
 }
