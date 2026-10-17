@@ -1,5 +1,7 @@
 #include "catch_amalgamated.hpp"
 #include "eax_native_abi.h"
+#include "context.h"
+#include "eax_reverb.h"
 #include <vector>
 #include <cmath>
 
@@ -14,9 +16,17 @@ static float calculate_rms_slice(const float* stereo_pcm, size_t start_frame, si
     return static_cast<float>(std::sqrt(sum_sq / static_cast<double>(count)));
 }
 
-TEST_CASE("EAX Reverb Tail: REVERB_CAVE Preset Extended Decay", "[reverb]") {
+TEST_CASE("EAX Reverb Tail: REVERB_CAVE Preset Extended Decay via OpenAL Soft", "[reverb]") {
     eax_context_h ctx = nullptr;
     REQUIRE(eax_context_create(&ctx) == EAX_OK);
+    REQUIRE(ctx->m_al_context != nullptr);
+
+    // Verify OpenAL Soft EFX auxiliary slot and effect handles are allocated
+    auto& ext = eax::get_al_ext();
+    if (ext.has_efx) {
+        REQUIRE(ctx->m_eax_slot != 0);
+        REQUIRE(ctx->m_eax_effect != 0);
+    }
 
     const uint32_t sample_rate = 44100;
     const float burst_duration = 0.03f; // 30 ms impulse tone
@@ -51,15 +61,8 @@ TEST_CASE("EAX Reverb Tail: REVERB_CAVE Preset Extended Decay", "[reverb]") {
     }
     REQUIRE(eax_buffer_unlock(buf, p1, b1, p2, b2) == EAX_OK);
 
-    // Configure EAX REVERB_CAVE preset (2.91s decay time)
-    eax20_listener_properties_t cave_props = {
-        -1000, 0, 0.0f, 2.91f, 1.30f, -602, 0.015f, -302, 0.022f,
-        EAX_ENVIRONMENT_CAVE, 14.6f, 1.0f, -5.0f, 0x3F
-    };
-    eax_guid_t guid_eax20_listener = {
-        0x0306A6A8, 0xB224, 0x11D2, {0x99, 0xE5, 0x00, 0x00, 0xE8, 0xD8, 0xC7, 0x22}
-    };
-    REQUIRE(eax_prop_set(ctx, nullptr, &guid_eax20_listener, 0, nullptr, 0, &cave_props, sizeof(cave_props)) == EAX_OK);
+    // Configure EAX REVERB_CAVE preset (2.91s decay time) using named constants from eax_reverb.h
+    REQUIRE(eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 0, nullptr, 0, &eax::PRESET_CAVE, sizeof(eax::PRESET_CAVE)) == EAX_OK);
 
     // Play once (non-looping), so dry sound terminates after 30 ms
     REQUIRE(eax_buffer_play(buf, 0, 0) == EAX_OK);
@@ -80,9 +83,9 @@ TEST_CASE("EAX Reverb Tail: REVERB_CAVE Preset Extended Decay", "[reverb]") {
     REQUIRE(cave_tail_rms > 0.001f);
 
     // Contrast with disabled reverb (dry room: lRoom = -10000 mB)
-    eax20_listener_properties_t dry_props = cave_props;
+    eax20_listener_properties_t dry_props = eax::PRESET_CAVE;
     dry_props.lRoom = -10000;
-    REQUIRE(eax_prop_set(ctx, nullptr, &guid_eax20_listener, 0, nullptr, 0, &dry_props, sizeof(dry_props)) == EAX_OK);
+    REQUIRE(eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 0, nullptr, 0, &dry_props, sizeof(dry_props)) == EAX_OK);
 
     REQUIRE(eax_buffer_set_current_position(buf, 0) == EAX_OK);
     REQUIRE(eax_buffer_play(buf, 0, 0) == EAX_OK);

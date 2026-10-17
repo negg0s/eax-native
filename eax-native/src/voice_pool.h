@@ -6,13 +6,23 @@
 #include <array>
 #include "eax_native_abi.h"
 #include "arena.h"
+#include "openal_bridge.h"
+
+struct eax_context_s;
 
 struct eax_buffer_s {
     std::atomic<bool> in_use{false};
     uint32_t id{0};
+    eax_context_s* context{nullptr};
 
     eax_dsbcaps_t caps{};
     eax_waveformat_ex_t format{};
+
+    // OpenAL objects
+    ALuint al_source{0};
+    ALuint al_buffer{0};
+    ALuint al_direct_filter{0};
+    ALuint al_send_filter{0};
 
     // Volume, Pan, Frequency
     std::atomic<int32_t> volume_mb{0};
@@ -37,7 +47,11 @@ struct eax_buffer_s {
     eax20_buffer_properties_t eax20_deferred{};
     bool eax20_has_deferred{false};
 
+    void init_openal(eax_context_s* ctx) noexcept;
+    void destroy_openal() noexcept;
     void reset() noexcept;
+    void sync_to_openal() noexcept;
+    void upload_sample_data() noexcept;
     void read_samples(float* out_left, float* out_right, size_t frame_count, uint32_t output_sample_rate) noexcept;
 };
 
@@ -48,8 +62,9 @@ public:
     static constexpr size_t MAX_VOICES = 64;
 
     VoicePool() noexcept;
-    ~VoicePool() noexcept = default;
+    ~VoicePool() noexcept;
 
+    void init(eax_context_s* ctx) noexcept;
     [[nodiscard]] eax_buffer_s* allocate_voice() noexcept;
     void release_voice(eax_buffer_s* voice) noexcept;
 
@@ -58,6 +73,7 @@ public:
 
 private:
     std::array<eax_buffer_s, MAX_VOICES> m_voices;
+    eax_context_s* m_context{nullptr};
 };
 
 } // namespace eax

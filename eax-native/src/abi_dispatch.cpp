@@ -77,6 +77,7 @@ EAX_API eax_result_t eax_listener_set_all_parameters(eax_context_h context, cons
         context->listener_has_deferred = true;
     } else {
         context->listener = *params;
+        context->sync_listener_to_openal();
     }
     return EAX_OK;
 }
@@ -94,6 +95,7 @@ EAX_API eax_result_t eax_listener_set_position(eax_context_h context, float x, f
         context->listener_has_deferred = true;
     } else {
         context->listener.vPosition = { x, y, z };
+        context->sync_listener_to_openal();
     }
     return EAX_OK;
 }
@@ -111,6 +113,7 @@ EAX_API eax_result_t eax_listener_set_velocity(eax_context_h context, float x, f
         context->listener_has_deferred = true;
     } else {
         context->listener.vVelocity = { x, y, z };
+        context->sync_listener_to_openal();
     }
     return EAX_OK;
 }
@@ -131,6 +134,7 @@ EAX_API eax_result_t eax_listener_set_orientation(eax_context_h context, float f
     } else {
         context->listener.vOrientFront = { fx, fy, fz };
         context->listener.vOrientTop = { tx, ty, tz };
+        context->sync_listener_to_openal();
     }
     return EAX_OK;
 }
@@ -148,6 +152,7 @@ EAX_API eax_result_t eax_listener_set_distance_factor(eax_context_h context, flo
         context->listener_has_deferred = true;
     } else {
         context->listener.flDistanceFactor = factor;
+        context->sync_listener_to_openal();
     }
     return EAX_OK;
 }
@@ -165,6 +170,7 @@ EAX_API eax_result_t eax_listener_set_rolloff_factor(eax_context_h context, floa
         context->listener_has_deferred = true;
     } else {
         context->listener.flRolloffFactor = factor;
+        context->sync_listener_to_openal();
     }
     return EAX_OK;
 }
@@ -182,6 +188,7 @@ EAX_API eax_result_t eax_listener_set_doppler_factor(eax_context_h context, floa
         context->listener_has_deferred = true;
     } else {
         context->listener.flDopplerFactor = factor;
+        context->sync_listener_to_openal();
     }
     return EAX_OK;
 }
@@ -204,13 +211,13 @@ EAX_API eax_result_t eax_buffer_create(eax_context_h context, const eax_dsbcaps_
     voice->format = *format;
     voice->frequency_hz.store(format->nSamplesPerSec, std::memory_order_relaxed);
 
-    // Allocate PCM sample memory from pre-allocated arena
     void* mem = context->arena.allocate(caps->dwBufferBytes);
     if (!mem && caps->dwBufferBytes > 0) {
         context->voice_pool.release_voice(voice);
         return EAX_ERR_OUT_OF_MEMORY;
     }
     voice->sample_buffer.initialize(mem, caps->dwBufferBytes);
+    voice->init_openal(context);
 
     *out_buffer = voice;
     return EAX_OK;
@@ -219,6 +226,10 @@ EAX_API eax_result_t eax_buffer_create(eax_context_h context, const eax_dsbcaps_
 EAX_API eax_result_t eax_buffer_destroy(eax_buffer_h buffer) {
     if (!buffer) return EAX_ERR_POINTER;
     buffer->status.store(0, std::memory_order_release);
+    if (buffer->al_source != 0) {
+        alSourceStop(buffer->al_source);
+        alSourcei(buffer->al_source, AL_BUFFER, 0);
+    }
     buffer->in_use.store(false, std::memory_order_release);
     return EAX_OK;
 }
@@ -236,8 +247,14 @@ EAX_API eax_result_t eax_buffer_duplicate(eax_context_h context, eax_buffer_h so
     voice->frequency_hz.store(source_buffer->frequency_hz.load(std::memory_order_relaxed), std::memory_order_relaxed);
     voice->ds3d = source_buffer->ds3d;
 
-    // Duplicate shares underlying sample memory
     voice->sample_buffer.initialize(source_buffer->sample_buffer.data(), source_buffer->sample_buffer.capacity());
+    voice->init_openal(context);
+
+    // Share OpenAL buffer
+    if (voice->al_source != 0 && source_buffer->al_buffer != 0) {
+        alSourcei(voice->al_source, AL_BUFFER, static_cast<ALint>(source_buffer->al_buffer));
+    }
+    voice->sync_to_openal();
 
     *out_buffer = voice;
     return EAX_OK;
@@ -263,6 +280,9 @@ EAX_API eax_result_t eax_buffer_lock(eax_buffer_h buffer, uint32_t offset, uint3
 
 EAX_API eax_result_t eax_buffer_unlock(eax_buffer_h buffer, void* /*ptr1*/, uint32_t /*bytes1*/, void* /*ptr2*/, uint32_t /*bytes2*/) {
     if (!buffer) return EAX_ERR_POINTER;
+    // Push PCM data to OpenAL buffer object
+    buffer->upload_sample_data();
+    buffer->sync_to_openal();
     return EAX_OK;
 }
 
@@ -274,25 +294,50 @@ EAX_API eax_result_t eax_buffer_play(eax_buffer_h buffer, uint32_t /*priority*/,
     uint32_t st = EAX_DSBSTATUS_PLAYING;
     if (looping) st |= EAX_DSBSTATUS_LOOPING;
     buffer->status.store(st, std::memory_order_release);
+
+    if (buffer->al_source != 0) {
+        alSourcei(buffer->al_source, AL_LOOPING, looping ? AL_TRUE : AL_FALSE);
+        alSourcePlay(buffer->al_source);
+    }
     return EAX_OK;
 }
 
 EAX_API eax_result_t eax_buffer_stop(eax_buffer_h buffer) {
     if (!buffer) return EAX_ERR_POINTER;
     buffer->status.store(0, std::memory_order_release);
+    if (buffer->al_source != 0) {
+        alSourceStop(buffer->al_source);
+    }
     return EAX_OK;
 }
 
 EAX_API eax_result_t eax_buffer_get_status(eax_buffer_h buffer, uint32_t* out_status) {
     if (!buffer || !out_status) return EAX_ERR_POINTER;
+    if (buffer->al_source != 0) {
+        ALint state = 0;
+        alGetSourcei(buffer->al_source, AL_SOURCE_STATE, &state);
+        uint32_t st = 0;
+        if (state == AL_PLAYING) {
+            st |= EAX_DSBSTATUS_PLAYING;
+            if (buffer->is_looping.load(std::memory_order_relaxed)) st |= EAX_DSBSTATUS_LOOPING;
+        }
+        buffer->status.store(st, std::memory_order_relaxed);
+    }
     *out_status = buffer->status.load(std::memory_order_acquire);
     return EAX_OK;
 }
 
 EAX_API eax_result_t eax_buffer_get_current_position(eax_buffer_h buffer, uint32_t* out_play_pos, uint32_t* out_write_pos) {
     if (!buffer) return EAX_ERR_POINTER;
-    if (out_play_pos) *out_play_pos = static_cast<uint32_t>(buffer->sample_buffer.get_play_pos());
-    if (out_write_pos) *out_write_pos = static_cast<uint32_t>(buffer->sample_buffer.get_write_pos());
+    if (buffer->al_source != 0) {
+        ALint offset = 0;
+        alGetSourcei(buffer->al_source, AL_BYTE_OFFSET, &offset);
+        if (out_play_pos) *out_play_pos = static_cast<uint32_t>(offset);
+        if (out_write_pos) *out_write_pos = static_cast<uint32_t>(offset);
+    } else {
+        if (out_play_pos) *out_play_pos = static_cast<uint32_t>(buffer->sample_buffer.get_play_pos());
+        if (out_write_pos) *out_write_pos = static_cast<uint32_t>(buffer->sample_buffer.get_write_pos());
+    }
     return EAX_OK;
 }
 
@@ -301,6 +346,9 @@ EAX_API eax_result_t eax_buffer_set_current_position(eax_buffer_h buffer, uint32
     buffer->sample_buffer.set_play_pos(new_pos);
     if (buffer->format.nBlockAlign > 0) {
         buffer->playback_cursor.store(static_cast<double>(new_pos / buffer->format.nBlockAlign), std::memory_order_relaxed);
+    }
+    if (buffer->al_source != 0) {
+        alSourcei(buffer->al_source, AL_BYTE_OFFSET, static_cast<ALint>(new_pos));
     }
     return EAX_OK;
 }
@@ -314,6 +362,9 @@ EAX_API eax_result_t eax_buffer_get_volume(eax_buffer_h buffer, int32_t* out_vol
 EAX_API eax_result_t eax_buffer_set_volume(eax_buffer_h buffer, int32_t volume_mb) {
     if (!buffer) return EAX_ERR_POINTER;
     buffer->volume_mb.store(volume_mb, std::memory_order_relaxed);
+    if (buffer->al_source != 0) {
+        alSourcef(buffer->al_source, AL_GAIN, eax::mb_to_gain(volume_mb));
+    }
     return EAX_OK;
 }
 
@@ -326,6 +377,13 @@ EAX_API eax_result_t eax_buffer_get_pan(eax_buffer_h buffer, int32_t* out_pan_mb
 EAX_API eax_result_t eax_buffer_set_pan(eax_buffer_h buffer, int32_t pan_mb) {
     if (!buffer) return EAX_ERR_POINTER;
     buffer->pan_mb.store(pan_mb, std::memory_order_relaxed);
+    if (buffer->al_source != 0 && (buffer->caps.dwFlags & EAX_DSBCAPS_CTRL3D) == 0) {
+        auto& ext = eax::get_al_ext();
+        if (ext.has_source_panning) {
+            alSourcei(buffer->al_source, AL_PANNING_ENABLED_SOFT, AL_TRUE);
+            alSourcef(buffer->al_source, AL_PAN_SOFT, eax::calculate_panning_soft(pan_mb));
+        }
+    }
     return EAX_OK;
 }
 
@@ -338,6 +396,10 @@ EAX_API eax_result_t eax_buffer_get_frequency(eax_buffer_h buffer, uint32_t* out
 EAX_API eax_result_t eax_buffer_set_frequency(eax_buffer_h buffer, uint32_t freq_hz) {
     if (!buffer || freq_hz == 0) return EAX_ERR_INVALID_PARAM;
     buffer->frequency_hz.store(freq_hz, std::memory_order_relaxed);
+    if (buffer->al_source != 0) {
+        const float pitch = static_cast<float>(freq_hz) / static_cast<float>(buffer->format.nSamplesPerSec ? buffer->format.nSamplesPerSec : 44100);
+        alSourcef(buffer->al_source, AL_PITCH, pitch);
+    }
     return EAX_OK;
 }
 
@@ -356,6 +418,7 @@ EAX_API eax_result_t eax_buffer_set_3d_all_parameters(eax_buffer_h buffer, const
         buffer->ds3d_has_deferred = true;
     } else {
         buffer->ds3d = *params;
+        buffer->sync_to_openal();
     }
     return EAX_OK;
 }
@@ -373,6 +436,7 @@ EAX_API eax_result_t eax_buffer_set_3d_position(eax_buffer_h buffer, float x, fl
         buffer->ds3d_has_deferred = true;
     } else {
         buffer->ds3d.vPosition = { x, y, z };
+        buffer->sync_to_openal();
     }
     return EAX_OK;
 }
@@ -390,6 +454,7 @@ EAX_API eax_result_t eax_buffer_set_3d_velocity(eax_buffer_h buffer, float x, fl
         buffer->ds3d_has_deferred = true;
     } else {
         buffer->ds3d.vVelocity = { x, y, z };
+        buffer->sync_to_openal();
     }
     return EAX_OK;
 }
@@ -410,6 +475,7 @@ EAX_API eax_result_t eax_buffer_set_3d_cone_angles(eax_buffer_h buffer, uint32_t
     } else {
         buffer->ds3d.dwInsideConeAngle = inside;
         buffer->ds3d.dwOutsideConeAngle = outside;
+        buffer->sync_to_openal();
     }
     return EAX_OK;
 }
@@ -427,6 +493,7 @@ EAX_API eax_result_t eax_buffer_set_3d_cone_orientation(eax_buffer_h buffer, flo
         buffer->ds3d_has_deferred = true;
     } else {
         buffer->ds3d.vConeOrientation = { x, y, z };
+        buffer->sync_to_openal();
     }
     return EAX_OK;
 }
@@ -444,6 +511,7 @@ EAX_API eax_result_t eax_buffer_set_3d_cone_outside_volume(eax_buffer_h buffer, 
         buffer->ds3d_has_deferred = true;
     } else {
         buffer->ds3d.lConeOutsideVolume = volume_mb;
+        buffer->sync_to_openal();
     }
     return EAX_OK;
 }
@@ -461,6 +529,7 @@ EAX_API eax_result_t eax_buffer_set_3d_min_distance(eax_buffer_h buffer, float d
         buffer->ds3d_has_deferred = true;
     } else {
         buffer->ds3d.flMinDistance = dist;
+        buffer->sync_to_openal();
     }
     return EAX_OK;
 }
@@ -478,6 +547,7 @@ EAX_API eax_result_t eax_buffer_set_3d_max_distance(eax_buffer_h buffer, float d
         buffer->ds3d_has_deferred = true;
     } else {
         buffer->ds3d.flMaxDistance = dist;
+        buffer->sync_to_openal();
     }
     return EAX_OK;
 }
@@ -495,6 +565,7 @@ EAX_API eax_result_t eax_buffer_set_3d_mode(eax_buffer_h buffer, uint32_t mode, 
         buffer->ds3d_has_deferred = true;
     } else {
         buffer->ds3d.dwMode = mode;
+        buffer->sync_to_openal();
     }
     return EAX_OK;
 }
@@ -560,7 +631,7 @@ EAX_API eax_result_t eax_prop_set(eax_context_h context, eax_buffer_h buffer, co
             context->eax_listener_has_deferred = true;
         } else {
             context->eax_listener = *p;
-            context->reverb_dsp.configure(context->eax_listener, 44100);
+            context->apply_eax_reverb_to_openal();
         }
         return EAX_OK;
     }
@@ -573,6 +644,7 @@ EAX_API eax_result_t eax_prop_set(eax_context_h context, eax_buffer_h buffer, co
             buffer->eax20_has_deferred = true;
         } else {
             buffer->eax20 = *p;
+            buffer->sync_to_openal();
         }
         return EAX_OK;
     }
@@ -588,7 +660,7 @@ EAX_API eax_result_t eax_prop_set(eax_context_h context, eax_buffer_h buffer, co
             context->eax_listener_has_deferred = true;
         } else {
             context->eax_listener = p20;
-            context->reverb_dsp.configure(context->eax_listener, 44100);
+            context->apply_eax_reverb_to_openal();
         }
         return EAX_OK;
     }

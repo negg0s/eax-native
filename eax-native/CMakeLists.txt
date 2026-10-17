@@ -29,15 +29,14 @@ if(EXISTS "${OPENAL_DIR}/CMakeLists.txt")
     set(OPENAL_INCLUDE_DIRS "${OPENAL_DIR}/include" "${OPENAL_DIR}/include/AL")
     set(OPENAL_LIBRARY OpenAL)
 else()
-    find_package(OpenAL QUIET)
-    if(OpenAL_FOUND)
-        set(OPENAL_INCLUDE_DIRS ${OPENAL_INCLUDE_DIR})
-        set(OPENAL_LIBRARY ${OPENAL_LIBRARY})
-    endif()
+    find_package(OpenAL REQUIRED)
+    set(OPENAL_INCLUDE_DIRS ${OPENAL_INCLUDE_DIR})
+    set(OPENAL_LIBRARY ${OPENAL_LIBRARY})
 endif()
 
 # Core Library: eax-native
 add_library(eax-native
+    src/openal_bridge.cpp
     src/arena.cpp
     src/voice_pool.cpp
     src/eax_reverb.cpp
@@ -51,11 +50,8 @@ target_include_directories(eax-native
         $<INSTALL_INTERFACE:include>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${OPENAL_INCLUDE_DIRS}
 )
-
-if(OPENAL_INCLUDE_DIRS)
-    target_include_directories(eax-native PRIVATE ${OPENAL_INCLUDE_DIRS})
-endif()
 
 if(TARGET OpenAL)
     target_link_libraries(eax-native PRIVATE OpenAL)
@@ -74,7 +70,11 @@ if(EAX_BUILD_DEMO)
         src/demo.cpp
     )
     target_link_libraries(eax_demo PRIVATE eax-native)
-    target_include_directories(eax_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_include_directories(eax_demo PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${OPENAL_INCLUDE_DIRS}
+    )
 endif()
 
 # Test suite with Catch2
@@ -96,6 +96,7 @@ if(EAX_BUILD_TESTS)
             ${CMAKE_CURRENT_SOURCE_DIR}/include
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/tests
+            ${OPENAL_INCLUDE_DIRS}
     )
 
     target_link_libraries(eax_tests PRIVATE eax-native)

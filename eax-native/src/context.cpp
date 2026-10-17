@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <vector>
 
-eax_context_s::eax_context_s() noexcept {
+eax_context_s::eax_context_s(bool loopback, uint32_t loopback_sample_rate) noexcept {
     listener.dwSize = sizeof(eax_ds3dlistener_t);
     listener.vPosition = { 0.0f, 0.0f, 0.0f };
     listener.vVelocity = { 0.0f, 0.0f, 0.0f };
@@ -17,7 +17,129 @@ eax_context_s::eax_context_s() noexcept {
     eax_listener = eax::PRESET_GENERIC;
     eax_listener_deferred = eax_listener;
     eax_listener_has_deferred = false;
-    reverb_dsp.configure(eax_listener, 44100);
+
+    init_openal(loopback, loopback_sample_rate);
+}
+
+eax_context_s::~eax_context_s() noexcept {
+    shutdown_openal();
+}
+
+void eax_context_s::init_openal(bool loopback, uint32_t loopback_sample_rate) noexcept {
+    auto& ext = eax::get_al_ext();
+    m_is_loopback = false;
+
+    if (loopback) {
+        // Try loopback device
+        if (alcIsExtensionPresent(nullptr, "ALC_SOFT_loopback")) {
+            ext.alcLoopbackOpenDeviceSOFT = reinterpret_cast<LPALCLOOPBACKOPENDEVICESOFT>(
+                alcGetProcAddress(nullptr, "alcLoopbackOpenDeviceSOFT"));
+            ext.alcRenderSamplesSOFT = reinterpret_cast<LPALCRENDERSAMPLESSOFT>(
+                alcGetProcAddress(nullptr, "alcRenderSamplesSOFT"));
+
+            if (ext.alcLoopbackOpenDeviceSOFT) {
+                const ALCint attrs[] = {
+                    ALC_FORMAT_CHANNELS_SOFT, ALC_STEREO_SOFT,
+                    ALC_FORMAT_TYPE_SOFT, ALC_FLOAT_SOFT,
+                    ALC_FREQUENCY, static_cast<ALCint>(loopback_sample_rate ? loopback_sample_rate : 44100),
+                    0
+                };
+                m_al_device = ext.alcLoopbackOpenDeviceSOFT(nullptr);
+                if (m_al_device) {
+                    m_al_context = alcCreateContext(m_al_device, attrs);
+                    m_is_loopback = true;
+                }
+            }
+        }
+    }
+
+    if (!m_al_device) {
+        // Standard interactive audio playback device
+        m_al_device = alcOpenDevice(nullptr);
+        if (m_al_device) {
+            m_al_context = alcCreateContext(m_al_device, nullptr);
+        }
+    }
+
+    if (m_al_context) {
+        alcMakeContextCurrent(m_al_context);
+        ext.init(m_al_device);
+
+        // Configure EFX EAX Reverb Auxiliary Slot
+        if (ext.has_efx && ext.alGenAuxiliaryEffectSlots && ext.alGenEffects) {
+            ext.alGenAuxiliaryEffectSlots(1, &m_eax_slot);
+            ext.alGenEffects(1, &m_eax_effect);
+            apply_eax_reverb_to_openal();
+        }
+
+        // Initialize voice pool with OpenAL source handles
+        voice_pool.init(this);
+        sync_listener_to_openal();
+    }
+}
+
+void eax_context_s::shutdown_openal() noexcept {
+    auto& ext = eax::get_al_ext();
+    if (m_al_context) {
+        alcMakeContextCurrent(nullptr);
+
+        if (m_eax_effect && ext.alDeleteEffects) {
+            ext.alDeleteEffects(1, &m_eax_effect);
+            m_eax_effect = 0;
+        }
+        if (m_eax_slot && ext.alDeleteAuxiliaryEffectSlots) {
+            ext.alDeleteAuxiliaryEffectSlots(1, &m_eax_slot);
+            m_eax_slot = 0;
+        }
+
+        alcDestroyContext(m_al_context);
+        m_al_context = nullptr;
+    }
+
+    if (m_al_device) {
+        alcCloseDevice(m_al_device);
+        m_al_device = nullptr;
+    }
+}
+
+void eax_context_s::sync_listener_to_openal() noexcept {
+    if (!m_al_context) return;
+
+    // Left-handed (+X right, +Y up, +Z forward) to OpenAL right-handed (+X right, +Y up, -Z forward)
+    alListener3f(AL_POSITION, listener.vPosition.x, listener.vPosition.y, -listener.vPosition.z);
+    alListener3f(AL_VELOCITY, listener.vVelocity.x, listener.vVelocity.y, -listener.vVelocity.z);
+
+    const float ori[6] = {
+        listener.vOrientFront.x, listener.vOrientFront.y, -listener.vOrientFront.z,
+        listener.vOrientTop.x, listener.vOrientTop.y, -listener.vOrientTop.z
+    };
+    alListenerfv(AL_ORIENTATION, ori);
+    alListenerf(AL_METERS_PER_UNIT, listener.flDistanceFactor);
+    alDopplerFactor(listener.flDopplerFactor);
+}
+
+void eax_context_s::apply_eax_reverb_to_openal() noexcept {
+    auto& ext = eax::get_al_ext();
+    if (!ext.has_efx || !m_eax_effect || !m_eax_slot || !ext.alEffecti || !ext.alEffectf || !ext.alAuxiliaryEffectSloti) {
+        return;
+    }
+
+    ext.alEffecti(m_eax_effect, AL_EFFECT_TYPE, AL_EFFECT_EAXREVERB);
+
+    // Translate EAX properties to AL_EAXREVERB_*
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_GAIN, eax::mb_to_gain(eax_listener.lRoom));
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_GAINHF, eax::mb_to_gain(eax_listener.lRoomHF));
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, eax_listener.flRoomRolloffFactor);
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_DECAY_TIME, std::clamp(eax_listener.flDecayTime, 0.1f, 20.0f));
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_DECAY_HFRATIO, std::clamp(eax_listener.flDecayHFRatio, 0.1f, 2.0f));
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_REFLECTIONS_GAIN, eax::mb_to_gain(eax_listener.lReflections));
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_REFLECTIONS_DELAY, std::clamp(eax_listener.flReflectionsDelay, 0.0f, 0.3f));
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_LATE_REVERB_GAIN, eax::mb_to_gain(eax_listener.lReverb));
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_LATE_REVERB_DELAY, std::clamp(eax_listener.flReverbDelay, 0.0f, 0.1f));
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_ENVIRONMENT_DIFFUSION, std::clamp(eax_listener.flEnvironmentDiffusion, 0.0f, 1.0f));
+
+    // Commit effect to auxiliary slot
+    ext.alAuxiliaryEffectSloti(m_eax_slot, AL_EFFECTSLOT_EFFECT, static_cast<ALint>(m_eax_effect));
 }
 
 void eax_context_s::commit_deferred_settings() noexcept {
@@ -25,11 +147,12 @@ void eax_context_s::commit_deferred_settings() noexcept {
     if (listener_has_deferred) {
         listener = listener_deferred;
         listener_has_deferred = false;
+        sync_listener_to_openal();
     }
     if (eax_listener_has_deferred) {
         eax_listener = eax_listener_deferred;
         eax_listener_has_deferred = false;
-        reverb_dsp.configure(eax_listener, 44100);
+        apply_eax_reverb_to_openal();
     }
 
     // Apply deferred buffer settings across all voices
@@ -38,10 +161,12 @@ void eax_context_s::commit_deferred_settings() noexcept {
         if (voice.ds3d_has_deferred) {
             voice.ds3d = voice.ds3d_deferred;
             voice.ds3d_has_deferred = false;
+            voice.sync_to_openal();
         }
         if (voice.eax20_has_deferred) {
             voice.eax20 = voice.eax20_deferred;
             voice.eax20_has_deferred = false;
+            voice.sync_to_openal();
         }
     }
 }
@@ -49,7 +174,14 @@ void eax_context_s::commit_deferred_settings() noexcept {
 void eax_context_s::render_offline(float* out_stereo_pcm, size_t frame_count, uint32_t sample_rate) noexcept {
     if (!out_stereo_pcm || frame_count == 0) return;
 
-    // Zero output
+    auto& ext = eax::get_al_ext();
+    if (m_is_loopback && ext.alcRenderSamplesSOFT && m_al_device) {
+        // Direct native OpenAL Soft rendering via ALC_SOFT_loopback
+        ext.alcRenderSamplesSOFT(m_al_device, out_stereo_pcm, static_cast<ALCsizei>(frame_count));
+        return;
+    }
+
+    // Diagnostic fallback software mixing if loopback is unavailable
     std::fill_n(out_stereo_pcm, frame_count * 2, 0.0f);
 
     std::vector<float> voice_l(frame_count, 0.0f);
@@ -64,7 +196,6 @@ void eax_context_s::render_offline(float* out_stereo_pcm, size_t frame_count, ui
 
         const bool is_3d = (voice.caps.dwFlags & EAX_DSBCAPS_CTRL3D) != 0;
         eax::SpatialGains gains;
-
         float p_left = 1.0f;
         float p_right = 1.0f;
 
@@ -75,7 +206,6 @@ void eax_context_s::render_offline(float* out_stereo_pcm, size_t frame_count, ui
         } else {
             const float vol = eax::mb_to_gain(voice.volume_mb.load(std::memory_order_relaxed));
             const float pan = eax::calculate_panning_soft(voice.pan_mb.load(std::memory_order_relaxed));
-            // Constant-power panning law
             p_left = vol * std::sqrt(0.5f * (1.0f - pan));
             p_right = vol * std::sqrt(0.5f * (1.0f + pan));
         }
@@ -84,19 +214,15 @@ void eax_context_s::render_offline(float* out_stereo_pcm, size_t frame_count, ui
             const float sample_mono = 0.5f * (voice_l[i] + voice_r[i]);
             out_stereo_pcm[2 * i] += voice_l[i] * p_left;
             out_stereo_pcm[2 * i + 1] += voice_r[i] * p_right;
-
-            // Reverb send (scaled by distance attenuation if 3D)
             const float send_gain = is_3d ? gains.distance_gain : 1.0f;
             reverb_send[i] += sample_mono * send_gain;
         }
     }
 
-    // Process Environmental Reverb
     for (size_t i = 0; i < frame_count; ++i) {
         float rev_l = 0.0f;
         float rev_r = 0.0f;
-        reverb_dsp.process(reverb_send[i], rev_l, rev_r);
-
+        fallback_reverb.process(reverb_send[i], rev_l, rev_r);
         out_stereo_pcm[2 * i] += rev_l;
         out_stereo_pcm[2 * i + 1] += rev_r;
     }

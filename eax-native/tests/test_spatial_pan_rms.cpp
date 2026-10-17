@@ -1,7 +1,10 @@
 #include "catch_amalgamated.hpp"
 #include "eax_native_abi.h"
+#include "context.h"
+#include "voice_pool.h"
 #include <vector>
 #include <cmath>
+#include <AL/al.h>
 
 static float calculate_rms(const float* samples, size_t count, size_t stride) {
     if (count == 0) return 0.0f;
@@ -13,9 +16,10 @@ static float calculate_rms(const float* samples, size_t count, size_t stride) {
     return static_cast<float>(std::sqrt(sum_sq / static_cast<double>(count)));
 }
 
-TEST_CASE("3D Spatial Panning RMS: 1 kHz Sine Left/Right Ratio", "[pan_rms]") {
+TEST_CASE("3D Spatial Panning RMS: 1 kHz Sine Left/Right Ratio via OpenAL Soft", "[pan_rms]") {
     eax_context_h ctx = nullptr;
     REQUIRE(eax_context_create(&ctx) == EAX_OK);
+    REQUIRE(ctx->m_al_context != nullptr);
 
     const uint32_t sample_rate = 44100;
     const float duration_sec = 0.5f;
@@ -38,6 +42,8 @@ TEST_CASE("3D Spatial Panning RMS: 1 kHz Sine Left/Right Ratio", "[pan_rms]") {
 
     eax_buffer_h buf = nullptr;
     REQUIRE(eax_buffer_create(ctx, &caps, &format, &buf) == EAX_OK);
+    REQUIRE(buf->al_source != 0);
+    REQUIRE(buf->al_buffer != 0);
 
     // Fill buffer with pure 1 kHz sine wave
     void *p1 = nullptr, *p2 = nullptr;
@@ -53,10 +59,20 @@ TEST_CASE("3D Spatial Panning RMS: 1 kHz Sine Left/Right Ratio", "[pan_rms]") {
 
     std::vector<float> output_pcm(frame_count * 2, 0.0f);
 
-    SECTION("Position Full Left (-10, 0, 0): RMS L >> RMS R") {
+    SECTION("Position Full Left (-10, 0, 0): OpenAL source pos and RMS L >> RMS R") {
         REQUIRE(eax_buffer_set_3d_position(buf, -10.0f, 0.0f, 0.0f, EAX_DS3D_IMMEDIATE) == EAX_OK);
+
+        // Verify OpenAL source position matches
+        float al_pos[3] = { 0.0f };
+        alGetSource3f(buf->al_source, AL_POSITION, &al_pos[0], &al_pos[1], &al_pos[2]);
+        REQUIRE(al_pos[0] == Catch::Approx(-10.0f));
+
         REQUIRE(eax_buffer_set_current_position(buf, 0) == EAX_OK);
         REQUIRE(eax_buffer_play(buf, 0, EAX_DSBPLAY_LOOPING) == EAX_OK);
+
+        ALint al_state = 0;
+        alGetSourcei(buf->al_source, AL_SOURCE_STATE, &al_state);
+        REQUIRE(al_state == AL_PLAYING);
 
         REQUIRE(eax_context_render_offline(ctx, output_pcm.data(), frame_count, sample_rate) == EAX_OK);
         REQUIRE(eax_buffer_stop(buf) == EAX_OK);
@@ -68,8 +84,13 @@ TEST_CASE("3D Spatial Panning RMS: 1 kHz Sine Left/Right Ratio", "[pan_rms]") {
         REQUIRE(rms_left / (rms_right + 0.00001f) > 5.0f);
     }
 
-    SECTION("Position Full Right (+10, 0, 0): RMS R >> RMS L") {
+    SECTION("Position Full Right (+10, 0, 0): OpenAL source pos and RMS R >> RMS L") {
         REQUIRE(eax_buffer_set_3d_position(buf, 10.0f, 0.0f, 0.0f, EAX_DS3D_IMMEDIATE) == EAX_OK);
+
+        float al_pos[3] = { 0.0f };
+        alGetSource3f(buf->al_source, AL_POSITION, &al_pos[0], &al_pos[1], &al_pos[2]);
+        REQUIRE(al_pos[0] == Catch::Approx(10.0f));
+
         REQUIRE(eax_buffer_set_current_position(buf, 0) == EAX_OK);
         REQUIRE(eax_buffer_play(buf, 0, EAX_DSBPLAY_LOOPING) == EAX_OK);
 
@@ -83,8 +104,14 @@ TEST_CASE("3D Spatial Panning RMS: 1 kHz Sine Left/Right Ratio", "[pan_rms]") {
         REQUIRE(rms_right / (rms_left + 0.00001f) > 5.0f);
     }
 
-    SECTION("Position Center Forward (0, 0, 10): RMS L ~= RMS R") {
+    SECTION("Position Center Forward (0, 0, 10): OpenAL source pos and RMS L ~= RMS R") {
         REQUIRE(eax_buffer_set_3d_position(buf, 0.0f, 0.0f, 10.0f, EAX_DS3D_IMMEDIATE) == EAX_OK);
+
+        // DS +Z forward maps to OpenAL -Z forward
+        float al_pos[3] = { 0.0f };
+        alGetSource3f(buf->al_source, AL_POSITION, &al_pos[0], &al_pos[1], &al_pos[2]);
+        REQUIRE(al_pos[2] == Catch::Approx(-10.0f));
+
         REQUIRE(eax_buffer_set_current_position(buf, 0) == EAX_OK);
         REQUIRE(eax_buffer_play(buf, 0, EAX_DSBPLAY_LOOPING) == EAX_OK);
 

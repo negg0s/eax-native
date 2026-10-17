@@ -1,6 +1,45 @@
 #include "voice_pool.h"
+#include "context.h"
+#include "spatializer.h"
 #include <cstring>
 #include <cmath>
+
+void eax_buffer_s::init_openal(eax_context_s* ctx) noexcept {
+    context = ctx;
+    if (al_source == 0) {
+        alGenSources(1, &al_source);
+    }
+    if (al_buffer == 0) {
+        alGenBuffers(1, &al_buffer);
+    }
+
+    auto& ext = eax::get_al_ext();
+    if (ext.has_efx && ext.alGenFilters) {
+        if (al_direct_filter == 0) ext.alGenFilters(1, &al_direct_filter);
+        if (al_send_filter == 0) ext.alGenFilters(1, &al_send_filter);
+    }
+}
+
+void eax_buffer_s::destroy_openal() noexcept {
+    auto& ext = eax::get_al_ext();
+    if (al_source != 0) {
+        alSourceStop(al_source);
+        alDeleteSources(1, &al_source);
+        al_source = 0;
+    }
+    if (al_buffer != 0) {
+        alDeleteBuffers(1, &al_buffer);
+        al_buffer = 0;
+    }
+    if (al_direct_filter != 0 && ext.alDeleteFilters) {
+        ext.alDeleteFilters(1, &al_direct_filter);
+        al_direct_filter = 0;
+    }
+    if (al_send_filter != 0 && ext.alDeleteFilters) {
+        ext.alDeleteFilters(1, &al_send_filter);
+        al_send_filter = 0;
+    }
+}
 
 void eax_buffer_s::reset() noexcept {
     caps = {};
@@ -16,6 +55,7 @@ void eax_buffer_s::reset() noexcept {
     ds3d.dwSize = sizeof(eax_ds3dbuffer_t);
     ds3d.flMinDistance = 1.0f;
     ds3d.flMaxDistance = 1000.0f;
+    ds3d.flRolloffFactor = 1.0f;
     ds3d.dwInsideConeAngle = 360;
     ds3d.dwOutsideConeAngle = 360;
     ds3d.dwMode = EAX_DS3DMODE_NORMAL;
@@ -25,6 +65,89 @@ void eax_buffer_s::reset() noexcept {
     eax20 = {};
     eax20_deferred = {};
     eax20_has_deferred = false;
+
+    if (al_source != 0) {
+        alSourceStop(al_source);
+        alSourcei(al_source, AL_BUFFER, 0);
+    }
+}
+
+void eax_buffer_s::upload_sample_data() noexcept {
+    if (al_buffer == 0 || !sample_buffer.data() || sample_buffer.capacity() == 0 || format.nSamplesPerSec == 0) {
+        return;
+    }
+
+    ALenum al_fmt = AL_FORMAT_MONO16;
+    if (format.wBitsPerSample == 16) {
+        al_fmt = (format.nChannels == 2) ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
+    } else {
+        al_fmt = (format.nChannels == 2) ? AL_FORMAT_STEREO8 : AL_FORMAT_MONO8;
+    }
+
+    alBufferData(al_buffer, al_fmt, sample_buffer.data(),
+                 static_cast<ALsizei>(sample_buffer.capacity()),
+                 static_cast<ALsizei>(format.nSamplesPerSec));
+
+    if (al_source != 0) {
+        alSourcei(al_source, AL_BUFFER, al_buffer);
+    }
+}
+
+void eax_buffer_s::sync_to_openal() noexcept {
+    if (al_source == 0) return;
+
+    alSourcef(al_source, AL_GAIN, eax::mb_to_gain(volume_mb.load(std::memory_order_relaxed)));
+
+    const uint32_t freq = frequency_hz.load(std::memory_order_relaxed);
+    const float pitch = static_cast<float>(freq) / static_cast<float>(format.nSamplesPerSec ? format.nSamplesPerSec : 44100);
+    alSourcef(al_source, AL_PITCH, pitch);
+
+    alSourcei(al_source, AL_LOOPING, is_looping.load(std::memory_order_relaxed) ? AL_TRUE : AL_FALSE);
+
+    const bool is_3d = (caps.dwFlags & EAX_DSBCAPS_CTRL3D) != 0;
+    if (is_3d) {
+        // DirectSound (+X right, +Y up, +Z forward) -> OpenAL (+X right, +Y up, -Z forward)
+        alSource3f(al_source, AL_POSITION, ds3d.vPosition.x, ds3d.vPosition.y, -ds3d.vPosition.z);
+        alSource3f(al_source, AL_VELOCITY, ds3d.vVelocity.x, ds3d.vVelocity.y, -ds3d.vVelocity.z);
+        alSource3f(al_source, AL_DIRECTION, ds3d.vConeOrientation.x, ds3d.vConeOrientation.y, -ds3d.vConeOrientation.z);
+
+        alSourcef(al_source, AL_REFERENCE_DISTANCE, ds3d.flMinDistance);
+        alSourcef(al_source, AL_MAX_DISTANCE, ds3d.flMaxDistance);
+        alSourcef(al_source, AL_ROLLOFF_FACTOR, ds3d.flRolloffFactor);
+
+        alSourcef(al_source, AL_CONE_INNER_ANGLE, static_cast<float>(ds3d.dwInsideConeAngle));
+        alSourcef(al_source, AL_CONE_OUTER_ANGLE, static_cast<float>(ds3d.dwOutsideConeAngle));
+        alSourcef(al_source, AL_CONE_OUTER_GAIN, eax::mb_to_gain(ds3d.lConeOutsideVolume));
+
+        alSourcei(al_source, AL_SOURCE_RELATIVE, (ds3d.dwMode != EAX_DS3DMODE_NORMAL) ? AL_TRUE : AL_FALSE);
+    } else {
+        alSourcef(al_source, AL_ROLLOFF_FACTOR, 0.0f);
+        alSourcei(al_source, AL_SOURCE_RELATIVE, AL_TRUE);
+
+        auto& ext = eax::get_al_ext();
+        if (ext.has_source_panning) {
+            alSourcei(al_source, AL_PANNING_ENABLED_SOFT, AL_TRUE);
+            alSourcef(al_source, AL_PAN_SOFT, eax::calculate_panning_soft(pan_mb.load(std::memory_order_relaxed)));
+        }
+    }
+
+    // EAX EFX Filters (Obstruction & Occlusion)
+    auto& ext = eax::get_al_ext();
+    if (ext.has_efx && context) {
+        if (al_direct_filter != 0 && ext.alFilteri && ext.alFilterf) {
+            ext.alFilteri(al_direct_filter, AL_FILTER_TYPE, AL_FILTER_LOWPASS);
+            ext.alFilterf(al_direct_filter, AL_LOWPASS_GAIN, 1.0f);
+            ext.alFilterf(al_direct_filter, AL_LOWPASS_GAINHF, eax::mb_to_gain(eax20.lObstruction));
+            alSourcei(al_source, AL_DIRECT_FILTER, al_direct_filter);
+        }
+
+        if (al_send_filter != 0 && ext.alFilteri && ext.alFilterf && context->m_eax_slot != 0) {
+            ext.alFilteri(al_send_filter, AL_FILTER_TYPE, AL_FILTER_LOWPASS);
+            ext.alFilterf(al_send_filter, AL_LOWPASS_GAIN, eax::mb_to_gain(eax20.lRoom));
+            ext.alFilterf(al_send_filter, AL_LOWPASS_GAINHF, eax::mb_to_gain(eax20.lOcclusion));
+            alSource3i(al_source, AL_AUXILIARY_SEND_FILTER, context->m_eax_slot, 0, al_send_filter);
+        }
+    }
 }
 
 void eax_buffer_s::read_samples(float* out_left, float* out_right, size_t frame_count, uint32_t output_sample_rate) noexcept {
@@ -62,7 +185,6 @@ void eax_buffer_s::read_samples(float* out_left, float* out_right, size_t frame_
             if (looping) {
                 cursor = std::fmod(cursor, static_cast<double>(total_frames));
             } else {
-                // Buffer finished playback
                 status.store(status.load(std::memory_order_relaxed) & ~EAX_DSBSTATUS_PLAYING, std::memory_order_release);
                 for (; i < frame_count; ++i) {
                     out_left[i] = 0.0f;
@@ -88,7 +210,6 @@ void eax_buffer_s::read_samples(float* out_left, float* out_right, size_t frame_
                 s_r = s_l;
             }
         } else {
-            // 8-bit unsigned PCM [0..255], center at 128
             const uint8_t* s8 = pcm_data + byte_offset;
             if (is_stereo) {
                 s_l = (static_cast<float>(s8[0]) - 128.0f) / 128.0f;
@@ -101,7 +222,6 @@ void eax_buffer_s::read_samples(float* out_left, float* out_right, size_t frame_
 
         out_left[i] = s_l;
         out_right[i] = s_r;
-
         cursor += pitch_ratio;
     }
 
@@ -118,6 +238,19 @@ VoicePool::VoicePool() noexcept {
     }
 }
 
+VoicePool::~VoicePool() noexcept {
+    for (auto& voice : m_voices) {
+        voice.destroy_openal();
+    }
+}
+
+void VoicePool::init(eax_context_s* ctx) noexcept {
+    m_context = ctx;
+    for (auto& voice : m_voices) {
+        voice.init_openal(ctx);
+    }
+}
+
 eax_buffer_s* VoicePool::allocate_voice() noexcept {
     for (auto& voice : m_voices) {
         bool expected = false;
@@ -127,12 +260,16 @@ eax_buffer_s* VoicePool::allocate_voice() noexcept {
             return &voice;
         }
     }
-    return nullptr; // No free voices
+    return nullptr;
 }
 
 void VoicePool::release_voice(eax_buffer_s* voice) noexcept {
     if (!voice) return;
     voice->status.store(0, std::memory_order_release);
+    if (voice->al_source != 0) {
+        alSourceStop(voice->al_source);
+        alSourcei(voice->al_source, AL_BUFFER, 0);
+    }
     voice->in_use.store(false, std::memory_order_release);
 }
 
