@@ -65,7 +65,7 @@ TEST_CASE("EAX Reverb Tail: REVERB_CAVE Preset Extended Decay via OpenAL Soft", 
     REQUIRE(eax_buffer_unlock(buf, p1, b1, p2, b2) == EAX_OK);
 
     // Configure EAX REVERB_CAVE preset (2.91s decay time) using named constants from eax_reverb.h
-    REQUIRE(eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 0, nullptr, 0, &eax::PRESET_CAVE, sizeof(eax::PRESET_CAVE)) == EAX_OK);
+    REQUIRE(eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 1, nullptr, 0, &eax::PRESET_CAVE, sizeof(eax::PRESET_CAVE)) == EAX_OK);
 
     // Play once (non-looping), so dry sound terminates after 30 ms
     REQUIRE(eax_buffer_play(buf, 0, 0) == EAX_OK);
@@ -88,7 +88,7 @@ TEST_CASE("EAX Reverb Tail: REVERB_CAVE Preset Extended Decay via OpenAL Soft", 
     // Contrast with disabled reverb (dry room: lRoom = -10000 mB)
     eax20_listener_properties_t dry_props = eax::PRESET_CAVE;
     dry_props.lRoom = -10000;
-    REQUIRE(eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 0, nullptr, 0, &dry_props, sizeof(dry_props)) == EAX_OK);
+    REQUIRE(eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 1, nullptr, 0, &dry_props, sizeof(dry_props)) == EAX_OK);
 
     REQUIRE(eax_buffer_set_current_position(buf, 0) == EAX_OK);
     REQUIRE(eax_buffer_play(buf, 0, 0) == EAX_OK);

@@ -240,6 +240,7 @@ EAX_API eax_result_t eax_buffer_create(eax_context_h context, const eax_dsbcaps_
         return EAX_ERR_OUT_OF_MEMORY;
     }
     voice->sample_buffer.initialize(mem, caps->dwBufferBytes);
+    voice->owns_arena_memory = (mem != nullptr);
     voice->init_openal(context);
 
     *out_buffer = voice;
@@ -253,6 +254,11 @@ EAX_API eax_result_t eax_buffer_destroy(eax_buffer_h buffer) {
         alSourceStop(buffer->al_source);
         alSourcei(buffer->al_source, AL_BUFFER, 0);
     }
+    if (buffer->context && buffer->owns_arena_memory && buffer->sample_buffer.data()) {
+        buffer->context->arena.free(buffer->sample_buffer.data(), buffer->sample_buffer.capacity());
+    }
+    buffer->owns_arena_memory = false;
+    buffer->sample_buffer.initialize(nullptr, 0);
     buffer->in_use.store(false, std::memory_order_release);
     return EAX_OK;
 }
@@ -272,7 +278,17 @@ EAX_API eax_result_t eax_buffer_duplicate(eax_context_h context, eax_buffer_h so
     voice->ds3d = source_buffer->get_ds3d_snapshot();
     voice->ds3d_seqlock.write_end();
 
-    voice->sample_buffer.initialize(source_buffer->sample_buffer.data(), source_buffer->sample_buffer.capacity());
+    const size_t buffer_bytes = source_buffer->sample_buffer.capacity();
+    void* mem = context->arena.allocate(buffer_bytes);
+    if (!mem && buffer_bytes > 0) {
+        context->voice_pool.release_voice(voice);
+        return EAX_ERR_OUT_OF_MEMORY;
+    }
+    if (mem && buffer_bytes > 0 && source_buffer->sample_buffer.data()) {
+        std::memcpy(mem, source_buffer->sample_buffer.data(), buffer_bytes);
+    }
+    voice->sample_buffer.initialize(mem, buffer_bytes);
+    voice->owns_arena_memory = (mem != nullptr);
     voice->init_openal(context);
 
     // Share OpenAL buffer
@@ -299,7 +315,9 @@ EAX_API eax_result_t eax_buffer_get_format(eax_buffer_h buffer, eax_waveformat_e
 
 EAX_API eax_result_t eax_buffer_lock(eax_buffer_h buffer, uint32_t offset, uint32_t bytes, void** ptr1, uint32_t* bytes1, void** ptr2, uint32_t* bytes2, uint32_t /*flags*/) {
     if (!buffer) return EAX_ERR_POINTER;
-    buffer->sample_buffer.lock_region(offset, bytes, ptr1, bytes1, ptr2, bytes2);
+    if (!buffer->sample_buffer.lock_region(offset, bytes, ptr1, bytes1, ptr2, bytes2)) {
+        return EAX_ERR_INVALID_PARAM;
+    }
     return EAX_OK;
 }
 
@@ -616,36 +634,159 @@ EAX_API eax_result_t eax_buffer_set_3d_mode(eax_buffer_h buffer, uint32_t mode, 
 
 /* ---------------- EAX Properties (IKsPropertySet) ---------------- */
 
+static bool eax20_listener_prop_get(const eax20_listener_properties_t& p, uint32_t base_id, void* prop_data, uint32_t prop_len, uint32_t* out_len) {
+    if (!prop_data || prop_len < 4) return false;
+    int32_t as_int = 0;
+    float as_float = 0.0f;
+    switch (base_id) {
+        case 2:  as_int = p.lRoom; goto copy;
+        case 3:  as_int = p.lRoomHF; goto copy;
+        case 4:  as_float = p.flRoomRolloffFactor; goto copy;
+        case 5:  as_float = p.flDecayTime; goto copy;
+        case 6:  as_float = p.flDecayHFRatio; goto copy;
+        case 7:  as_int = p.lReflections; goto copy;
+        case 8:  as_float = p.flReflectionsDelay; goto copy;
+        case 9:  as_int = p.lReverb; goto copy;
+        case 10: as_float = p.flReverbDelay; goto copy;
+        case 11: as_int = static_cast<int32_t>(p.dwEnvironment); goto copy;
+        case 12: as_float = p.flEnvironmentSize; goto copy;
+        case 13: as_float = p.flEnvironmentDiffusion; goto copy;
+        case 14: as_float = p.flAirAbsorptionHF; goto copy;
+        case 15: as_int = static_cast<int32_t>(p.dwFlags); goto copy;
+        default: return false;
+    }
+copy:
+    std::memcpy(prop_data, (base_id == 4 || base_id == 5 || base_id == 6 || base_id == 8 ||
+                            base_id == 10 || base_id == 12 || base_id == 13 || base_id == 14)
+                           ? static_cast<const void*>(&as_float) : static_cast<const void*>(&as_int), 4);
+    if (out_len) *out_len = 4;
+    return true;
+}
+
+static bool apply_eax20_listener_prop(eax20_listener_properties_t& p, uint32_t base_id, const void* prop_data, uint32_t prop_len) {
+    if (!prop_data || prop_len < 4) return false;
+    const int32_t as_int = *static_cast<const int32_t*>(prop_data);
+    const uint32_t as_uint = *static_cast<const uint32_t*>(prop_data);
+    const float as_float = *static_cast<const float*>(prop_data);
+    switch (base_id) {
+        case 2:  p.lRoom = as_int; return true;
+        case 3:  p.lRoomHF = as_int; return true;
+        case 4:  p.flRoomRolloffFactor = as_float; return true;
+        case 5:  p.flDecayTime = as_float; return true;
+        case 6:  p.flDecayHFRatio = as_float; return true;
+        case 7:  p.lReflections = as_int; return true;
+        case 8:  p.flReflectionsDelay = as_float; return true;
+        case 9:  p.lReverb = as_int; return true;
+        case 10: p.flReverbDelay = as_float; return true;
+        case 11:
+            p.dwEnvironment = as_uint;
+            if (as_uint == EAX_ENVIRONMENT_GENERIC) p = eax::PRESET_GENERIC;
+            else if (as_uint == EAX_ENVIRONMENT_CAVE) p = eax::PRESET_CAVE;
+            return true;
+        case 12: p.flEnvironmentSize = as_float; return true;
+        case 13: p.flEnvironmentDiffusion = as_float; return true;
+        case 14: p.flAirAbsorptionHF = as_float; return true;
+        case 15: p.dwFlags = as_uint; return true;
+        default: return false;
+    }
+}
+
+static bool eax20_buffer_prop_get(const eax20_buffer_properties_t& p, uint32_t base_id, void* prop_data, uint32_t prop_len, uint32_t* out_len) {
+    if (!prop_data || prop_len < 4) return false;
+    int32_t as_int = 0;
+    float as_float = 0.0f;
+    switch (base_id) {
+        case 2:  as_int = p.lDirect; goto copy_int;
+        case 3:  as_int = p.lDirectHF; goto copy_int;
+        case 4:  as_int = p.lRoom; goto copy_int;
+        case 5:  as_int = p.lRoomHF; goto copy_int;
+        case 6:  as_float = p.flRoomRolloffFactor; goto copy_float;
+        case 7:  as_int = p.lObstruction; goto copy_int;
+        case 8:  as_float = p.flObstructionLFRatio; goto copy_float;
+        case 9:  as_int = p.lOcclusion; goto copy_int;
+        case 10: as_float = p.flOcclusionLFRatio; goto copy_float;
+        case 11: as_float = p.flOcclusionRoomRatio; goto copy_float;
+        case 12: as_int = p.lOutsideVolumeHF; goto copy_int;
+        case 13: as_float = p.flAirAbsorptionFactor; goto copy_float;
+        case 14: as_int = static_cast<int32_t>(p.dwFlags); goto copy_int;
+        default: return false;
+    }
+copy_int:
+    std::memcpy(prop_data, &as_int, sizeof(as_int));
+    if (out_len) *out_len = sizeof(as_int);
+    return true;
+copy_float:
+    std::memcpy(prop_data, &as_float, sizeof(as_float));
+    if (out_len) *out_len = sizeof(as_float);
+    return true;
+}
+
+static bool apply_eax20_buffer_prop(eax20_buffer_properties_t& p, uint32_t base_id, const void* prop_data, uint32_t prop_len) {
+    if (!prop_data || prop_len < 4) return false;
+    const int32_t as_int = *static_cast<const int32_t*>(prop_data);
+    const float as_float = *static_cast<const float*>(prop_data);
+    switch (base_id) {
+        case 2:  p.lDirect = as_int; return true;
+        case 3:  p.lDirectHF = as_int; return true;
+        case 4:  p.lRoom = as_int; return true;
+        case 5:  p.lRoomHF = as_int; return true;
+        case 6:  p.flRoomRolloffFactor = as_float; return true;
+        case 7:  p.lObstruction = as_int; return true;
+        case 8:  p.flObstructionLFRatio = as_float; return true;
+        case 9:  p.lOcclusion = as_int; return true;
+        case 10: p.flOcclusionLFRatio = as_float; return true;
+        case 11: p.flOcclusionRoomRatio = as_float; return true;
+        case 12: p.lOutsideVolumeHF = as_int; return true;
+        case 13: p.flAirAbsorptionFactor = as_float; return true;
+        case 14: p.dwFlags = static_cast<uint32_t>(as_int); return true;
+        default: return false;
+    }
+}
+
 EAX_API eax_result_t eax_prop_query_support(eax_context_h context, eax_buffer_h /*buffer*/, const eax_guid_t* prop_set, uint32_t /*prop_id*/, uint32_t* out_support) {
     if (!context || !prop_set || !out_support) return EAX_ERR_POINTER;
 
     if (eax::are_guids_equal(*prop_set, eax::GUID_EAX10_Listener) ||
         eax::are_guids_equal(*prop_set, eax::GUID_EAX10_Buffer) ||
         eax::are_guids_equal(*prop_set, eax::GUID_EAX20_Listener) ||
-        eax::are_guids_equal(*prop_set, eax::GUID_EAX20_Buffer) ||
-        eax::are_guids_equal(*prop_set, eax::GUID_EAX30_Listener) ||
-        eax::are_guids_equal(*prop_set, eax::GUID_EAX30_Buffer) ||
-        eax::are_guids_equal(*prop_set, eax::GUID_EAX40_Context) ||
-        eax::are_guids_equal(*prop_set, eax::GUID_EAX40_Source)) {
+        eax::are_guids_equal(*prop_set, eax::GUID_EAX20_Buffer)) {
         *out_support = EAX_KSPROPERTY_SUPPORT_GET | EAX_KSPROPERTY_SUPPORT_SET;
         return EAX_OK;
     }
     return EAX_ERR_PROP_UNSUPPORTED;
 }
 
-EAX_API eax_result_t eax_prop_get(eax_context_h context, eax_buffer_h buffer, const eax_guid_t* prop_set, uint32_t /*prop_id*/, void* /*instance_data*/, uint32_t /*instance_len*/, void* prop_data, uint32_t prop_len, uint32_t* bytes_returned) {
+EAX_API eax_result_t eax_prop_get(eax_context_h context, eax_buffer_h buffer, const eax_guid_t* prop_set, uint32_t prop_id, void* /*instance_data*/, uint32_t /*instance_len*/, void* prop_data, uint32_t prop_len, uint32_t* bytes_returned) {
     if (!context || !prop_set || !prop_data) return EAX_ERR_POINTER;
 
+    const uint32_t base_id = prop_id & 0x7FFFFFFFu;
+
     if (eax::are_guids_equal(*prop_set, eax::GUID_EAX20_Listener)) {
-        if (prop_len < sizeof(eax20_listener_properties_t)) return EAX_ERR_INVALID_PARAM;
-        std::memcpy(prop_data, &context->eax_listener, sizeof(eax20_listener_properties_t));
-        if (bytes_returned) *bytes_returned = sizeof(eax20_listener_properties_t);
+        if (base_id == 0) return EAX_ERR_PROP_UNSUPPORTED;
+        uint32_t returned = 0;
+        if (base_id == 1) {
+            if (prop_len < sizeof(eax20_listener_properties_t)) return EAX_ERR_INVALID_PARAM;
+            std::memcpy(prop_data, &context->eax_listener, sizeof(eax20_listener_properties_t));
+            returned = sizeof(eax20_listener_properties_t);
+        } else if (!eax20_listener_prop_get(context->eax_listener, base_id, prop_data, prop_len, &returned)) {
+            return EAX_ERR_PROP_UNSUPPORTED;
+        }
+        if (bytes_returned) *bytes_returned = returned;
         return EAX_OK;
     }
     if (eax::are_guids_equal(*prop_set, eax::GUID_EAX20_Buffer)) {
-        if (!buffer || prop_len < sizeof(eax20_buffer_properties_t)) return EAX_ERR_INVALID_PARAM;
-        std::memcpy(prop_data, &buffer->eax20, sizeof(eax20_buffer_properties_t));
-        if (bytes_returned) *bytes_returned = sizeof(eax20_buffer_properties_t);
+        if (!buffer) return EAX_ERR_INVALID_PARAM;
+        if (base_id == 0 || base_id == 1) {
+            if (prop_len < sizeof(eax20_buffer_properties_t)) return EAX_ERR_INVALID_PARAM;
+            std::memcpy(prop_data, &buffer->eax20, sizeof(eax20_buffer_properties_t));
+            if (bytes_returned) *bytes_returned = sizeof(eax20_buffer_properties_t);
+            return EAX_OK;
+        }
+        uint32_t returned = 0;
+        if (!eax20_buffer_prop_get(buffer->eax20, base_id, prop_data, prop_len, &returned)) {
+            return EAX_ERR_PROP_UNSUPPORTED;
+        }
+        if (bytes_returned) *bytes_returned = returned;
         return EAX_OK;
     }
     if (eax::are_guids_equal(*prop_set, eax::GUID_EAX10_Listener)) {
@@ -659,53 +800,97 @@ EAX_API eax_result_t eax_prop_get(eax_context_h context, eax_buffer_h buffer, co
         if (bytes_returned) *bytes_returned = sizeof(p10);
         return EAX_OK;
     }
+    if (eax::are_guids_equal(*prop_set, eax::GUID_EAX10_Buffer)) {
+        if (!buffer || prop_len < sizeof(float)) return EAX_ERR_INVALID_PARAM;
+        const float mix = buffer->eax10_mix.load(std::memory_order_relaxed);
+        std::memcpy(prop_data, &mix, sizeof(float));
+        if (bytes_returned) *bytes_returned = sizeof(float);
+        return EAX_OK;
+    }
     return EAX_ERR_PROP_UNSUPPORTED;
 }
 
 EAX_API eax_result_t eax_prop_set(eax_context_h context, eax_buffer_h buffer, const eax_guid_t* prop_set, uint32_t prop_id, void* /*instance_data*/, uint32_t /*instance_len*/, const void* prop_data, uint32_t prop_len) {
-    if (!context || !prop_set || !prop_data) return EAX_ERR_POINTER;
+    if (!context || !prop_set || (!prop_data && prop_len > 0)) return EAX_ERR_POINTER;
 
-    const bool deferred = (prop_id & 0x80000000u) != 0;
+    const uint32_t base_id = prop_id & 0x7FFFFFFFu;
 
     if (eax::are_guids_equal(*prop_set, eax::GUID_EAX20_Listener)) {
-        if (prop_len < sizeof(eax20_listener_properties_t)) return EAX_ERR_INVALID_PARAM;
-        const auto* p = static_cast<const eax20_listener_properties_t*>(prop_data);
-        if (deferred) {
-            context->eax_listener_deferred = *p;
+        if (base_id == 0) {
+            context->commit_deferred_settings();
+            return EAX_OK;
+        }
+        eax20_listener_properties_t p = (base_id == 1)
+            ? [&]() {
+                if (prop_len < sizeof(eax20_listener_properties_t)) return eax20_listener_properties_t{};
+                return *static_cast<const eax20_listener_properties_t*>(prop_data);
+            }()
+            : context->eax_listener;
+        if (base_id == 1 && prop_len < sizeof(eax20_listener_properties_t)) return EAX_ERR_INVALID_PARAM;
+        if (base_id != 1 && !apply_eax20_listener_prop(p, base_id, prop_data, prop_len)) {
+            return EAX_ERR_PROP_UNSUPPORTED;
+        }
+        if (prop_id & 0x80000000u) {
+            context->eax_listener_deferred = p;
             context->eax_listener_has_deferred = true;
         } else {
-            context->eax_listener = *p;
+            context->eax_listener = p;
             context->apply_eax_reverb_to_openal();
         }
         return EAX_OK;
     }
 
     if (eax::are_guids_equal(*prop_set, eax::GUID_EAX20_Buffer)) {
-        if (!buffer || prop_len < sizeof(eax20_buffer_properties_t)) return EAX_ERR_INVALID_PARAM;
-        const auto* p = static_cast<const eax20_buffer_properties_t*>(prop_data);
-        if (deferred) {
-            buffer->eax20_deferred = *p;
+        if (!buffer) return EAX_ERR_INVALID_PARAM;
+        if (base_id == 0) {
+            buffer->commit_deferred_eax20();
+            return EAX_OK;
+        }
+        eax20_buffer_properties_t p = (base_id == 1)
+            ? [&]() {
+                if (prop_len < sizeof(eax20_buffer_properties_t)) return eax20_buffer_properties_t{};
+                return *static_cast<const eax20_buffer_properties_t*>(prop_data);
+            }()
+            : buffer->eax20;
+        if (base_id == 1 && prop_len < sizeof(eax20_buffer_properties_t)) return EAX_ERR_INVALID_PARAM;
+        if (base_id != 1 && !apply_eax20_buffer_prop(p, base_id, prop_data, prop_len)) {
+            return EAX_ERR_PROP_UNSUPPORTED;
+        }
+        if (prop_id & 0x80000000u) {
+            buffer->eax20_deferred = p;
             buffer->eax20_has_deferred = true;
         } else {
-            buffer->eax20 = *p;
+            buffer->eax20 = p;
             buffer->sync_to_openal();
         }
         return EAX_OK;
     }
 
     if (eax::are_guids_equal(*prop_set, eax::GUID_EAX10_Listener)) {
+        if (base_id == 0) {
+            context->commit_deferred_settings();
+            return EAX_OK;
+        }
         if (prop_len < sizeof(eax10_reverb_properties_t)) return EAX_ERR_INVALID_PARAM;
         const auto* p = static_cast<const eax10_reverb_properties_t*>(prop_data);
         eax20_listener_properties_t p20 = context->eax_listener;
         p20.dwEnvironment = p->dwEnvironment;
         p20.flDecayTime = p->fDecayTime_sec;
-        if (deferred) {
+        if (prop_id & 0x80000000u) {
             context->eax_listener_deferred = p20;
             context->eax_listener_has_deferred = true;
         } else {
             context->eax_listener = p20;
             context->apply_eax_reverb_to_openal();
         }
+        return EAX_OK;
+    }
+
+    if (eax::are_guids_equal(*prop_set, eax::GUID_EAX10_Buffer)) {
+        if (!buffer || prop_len < sizeof(float)) return EAX_ERR_INVALID_PARAM;
+        float mix = 0.0f;
+        std::memcpy(&mix, prop_data, sizeof(float));
+        buffer->eax10_mix.store(mix, std::memory_order_relaxed);
         return EAX_OK;
     }
 

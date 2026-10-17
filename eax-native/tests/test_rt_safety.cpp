@@ -83,7 +83,7 @@ TEST_CASE("RT Safety: Zero dynamic memory allocation on audio rendering thread",
     REQUIRE(eax_context_create_offline(&ctx, 48000) == EAX_OK);
 
     // Configure EAX preset
-    REQUIRE(eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 0, nullptr, 0,
+    REQUIRE(eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 1, nullptr, 0,
                          &eax::PRESET_CAVE, sizeof(eax::PRESET_CAVE)) == EAX_OK);
 
     // Create 3D voice buffer

@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
 
     // Configure EAX Environment to REVERB_CAVE using named constants from eax_reverb.h
     std::cout << "[*] Configuring OpenAL Soft EAX 2.0 preset: REVERB_CAVE (decay = 2.91s)...\n";
-    eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 0, nullptr, 0, &eax::PRESET_CAVE, sizeof(eax::PRESET_CAVE));
+    eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 1, nullptr, 0, &eax::PRESET_CAVE, sizeof(eax::PRESET_CAVE));
 
     // Create 3D Sound Buffer
     const uint32_t sample_rate = 44100;

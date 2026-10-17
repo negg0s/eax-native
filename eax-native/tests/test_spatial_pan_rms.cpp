@@ -64,7 +64,7 @@ TEST_CASE("3D Spatial Panning RMS: 1 kHz Sine Left/Right Ratio via OpenAL Soft",
     eax20_listener_properties_t dry_env = eax::PRESET_GENERIC;
     dry_env.lRoom = -10000;
     dry_env.lRoomHF = -10000;
-    REQUIRE(eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 0, nullptr, 0, &dry_env, sizeof(dry_env)) == EAX_OK);
+    REQUIRE(eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 1, nullptr, 0, &dry_env, sizeof(dry_env)) == EAX_OK);
 
     std::vector<float> output_pcm(frame_count * 2, 0.0f);
 

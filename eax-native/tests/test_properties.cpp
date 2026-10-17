@@ -50,9 +50,8 @@ TEST_CASE("EAX Property Sets: IKsPropertySet Query, Get, Set, and Deferred Commi
         REQUIRE(eax_prop_query_support(ctx, buf, &guid_eax20_buffer, 0, &support) == EAX_OK);
         REQUIRE((support & (EAX_KSPROPERTY_SUPPORT_GET | EAX_KSPROPERTY_SUPPORT_SET)) != 0);
 
-        REQUIRE(eax_prop_query_support(ctx, buf, &guid_eax40_context, 0, &support) == EAX_OK);
-        REQUIRE((support & (EAX_KSPROPERTY_SUPPORT_GET | EAX_KSPROPERTY_SUPPORT_SET)) != 0);
-
+        REQUIRE(eax_prop_query_support(ctx, buf, &guid_eax40_context, 0, &support) == EAX_ERR_PROP_UNSUPPORTED);
+    }
         REQUIRE(eax_prop_query_support(ctx, buf, &guid_unknown, 0, &support) == EAX_ERR_PROP_UNSUPPORTED);
     }
 
@@ -73,11 +72,11 @@ TEST_CASE("EAX Property Sets: IKsPropertySet Query, Get, Set, and Deferred Commi
         set_props.flAirAbsorptionHF = -2.0f;
         set_props.dwFlags = 0x1F;
 
-        REQUIRE(eax_prop_set(ctx, nullptr, &guid_eax20_listener, 0, nullptr, 0, &set_props, sizeof(set_props)) == EAX_OK);
+        REQUIRE(eax_prop_set(ctx, nullptr, &guid_eax20_listener, 1, nullptr, 0, &set_props, sizeof(set_props)) == EAX_OK);
 
         eax20_listener_properties_t get_props{};
         uint32_t returned = 0;
-        REQUIRE(eax_prop_get(ctx, nullptr, &guid_eax20_listener, 0, nullptr, 0, &get_props, sizeof(get_props), &returned) == EAX_OK);
+        REQUIRE(eax_prop_get(ctx, nullptr, &guid_eax20_listener, 1, nullptr, 0, &get_props, sizeof(get_props), &returned) == EAX_OK);
         REQUIRE(returned == sizeof(eax20_listener_properties_t));
         REQUIRE(get_props.lRoom == -1500);
         REQUIRE(get_props.flDecayTime == Catch::Approx(3.5f));
@@ -92,11 +91,11 @@ TEST_CASE("EAX Property Sets: IKsPropertySet Query, Get, Set, and Deferred Commi
         set_buf_props.lOcclusion = -1500;
         set_buf_props.dwFlags = 0x07;
 
-        REQUIRE(eax_prop_set(ctx, buf, &guid_eax20_buffer, 0, nullptr, 0, &set_buf_props, sizeof(set_buf_props)) == EAX_OK);
+        REQUIRE(eax_prop_set(ctx, buf, &guid_eax20_buffer, 1, nullptr, 0, &set_buf_props, sizeof(set_buf_props)) == EAX_OK);
 
         eax20_buffer_properties_t get_buf_props{};
         uint32_t returned = 0;
-        REQUIRE(eax_prop_get(ctx, buf, &guid_eax20_buffer, 0, nullptr, 0, &get_buf_props, sizeof(get_buf_props), &returned) == EAX_OK);
+        REQUIRE(eax_prop_get(ctx, buf, &guid_eax20_buffer, 1, nullptr, 0, &get_buf_props, sizeof(get_buf_props), &returned) == EAX_OK);
         REQUIRE(returned == sizeof(eax20_buffer_properties_t));
         REQUIRE(get_buf_props.lObstruction == -1200);
         REQUIRE(get_buf_props.lOcclusion == -1500);
@@ -107,18 +106,18 @@ TEST_CASE("EAX Property Sets: IKsPropertySet Query, Get, Set, and Deferred Commi
         deferred_props.dwEnvironment = EAX_ENVIRONMENT_AUDITORIUM;
         deferred_props.flDecayTime = 5.0f;
 
-        // Bit 31 set indicates deferred mode
-        const uint32_t deferred_prop_id = 0x80000000u;
+        // Bit 31 set indicates deferred mode; deferred ALLPARAMETERS = 0x80000001
+        const uint32_t deferred_prop_id = 0x80000001u;
         REQUIRE(eax_prop_set(ctx, nullptr, &guid_eax20_listener, deferred_prop_id, nullptr, 0, &deferred_props, sizeof(deferred_props)) == EAX_OK);
 
         // Before commit: old value remains
         eax20_listener_properties_t current_props{};
-        REQUIRE(eax_prop_get(ctx, nullptr, &guid_eax20_listener, 0, nullptr, 0, &current_props, sizeof(current_props), nullptr) == EAX_OK);
+        REQUIRE(eax_prop_get(ctx, nullptr, &guid_eax20_listener, 1, nullptr, 0, &current_props, sizeof(current_props), nullptr) == EAX_OK);
         REQUIRE(current_props.dwEnvironment != EAX_ENVIRONMENT_AUDITORIUM);
 
         // After commit: new value takes effect
         REQUIRE(eax_listener_commit_deferred(ctx) == EAX_OK);
-        REQUIRE(eax_prop_get(ctx, nullptr, &guid_eax20_listener, 0, nullptr, 0, &current_props, sizeof(current_props), nullptr) == EAX_OK);
+        REQUIRE(eax_prop_get(ctx, nullptr, &guid_eax20_listener, 1, nullptr, 0, &current_props, sizeof(current_props), nullptr) == EAX_OK);
         REQUIRE(current_props.dwEnvironment == EAX_ENVIRONMENT_AUDITORIUM);
         REQUIRE(current_props.flDecayTime == Catch::Approx(5.0f));
     }
