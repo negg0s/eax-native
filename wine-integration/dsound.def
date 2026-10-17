@@ -1,0 +1,19 @@
+EXPORTS
+    DirectSoundCreate@12=DirectSoundCreate
+    DirectSoundCreate8@12=DirectSoundCreate8
+    DirectSoundEnumerateA@8=DirectSoundEnumerateA
+    DirectSoundEnumerateW@8=DirectSoundEnumerateW
+    GetDeviceID@8=GetDeviceID
+    DllCanUnloadNow@0=DllCanUnloadNow
+    DllGetClassObject@12=DllGetClassObject
+    DllRegisterServer@0=DllRegisterServer
+    DllUnregisterServer@0=DllUnregisterServer
+    DirectSoundCreate
+    DirectSoundCreate8
+    DirectSoundEnumerateA
+    DirectSoundEnumerateW
+    GetDeviceID
+    DllCanUnloadNow
+    DllGetClassObject
+    DllRegisterServer
+    DllUnregisterServer
