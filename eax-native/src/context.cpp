@@ -30,6 +30,7 @@ eax_context_s::~eax_context_s() noexcept {
 void eax_context_s::init_openal(bool loopback, uint32_t loopback_sample_rate) noexcept {
     auto& ext = eax::get_al_ext();
     m_is_loopback = false;
+    fallback_sample_rate = loopback_sample_rate ? loopback_sample_rate : 44100;
 
     if (loopback) {
         // Try loopback device
@@ -122,6 +123,8 @@ void eax_context_s::sync_listener_to_openal() noexcept {
 }
 
 void eax_context_s::apply_eax_reverb_to_openal() noexcept {
+    fallback_reverb.configure(eax_listener, fallback_sample_rate);
+
     auto& ext = eax::get_al_ext();
     if (!ext.has_efx || !m_eax_effect || !m_eax_slot || !ext.alEffecti || !ext.alEffectf || !ext.alAuxiliaryEffectSloti) {
         return;
@@ -190,6 +193,10 @@ void eax_context_s::render_offline(float* out_stereo_pcm, size_t frame_count, ui
 
     // Diagnostic fallback software mixing if loopback is unavailable
     // Process in chunks of SCRATCH_MAX_FRAMES using preallocated member buffers (RT safe: zero malloc)
+    if (fallback_sample_rate != sample_rate) {
+        fallback_sample_rate = sample_rate;
+        fallback_reverb.configure(eax_listener, sample_rate);
+    }
     size_t frames_rendered = 0;
     while (frames_rendered < frame_count) {
         const size_t chunk = std::min(frame_count - frames_rendered, SCRATCH_MAX_FRAMES);

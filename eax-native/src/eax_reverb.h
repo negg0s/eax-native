@@ -80,6 +80,12 @@ inline constexpr eax20_listener_properties_t PRESET_GENERIC = {
 // Reverb DSP Comb Filter
 class CombFilter {
 public:
+    void reserve(size_t n) noexcept {
+        if (m_buffer.capacity() < n) {
+            m_buffer.reserve(n);
+        }
+    }
+
     void init(size_t delay_samples, float feedback, float damping) noexcept {
         m_buffer.assign(delay_samples + 1, 0.0f);
         m_index = 0;
@@ -110,6 +116,12 @@ private:
 // Reverb DSP Allpass Filter
 class AllpassFilter {
 public:
+    void reserve(size_t n) noexcept {
+        if (m_buffer.capacity() < n) {
+            m_buffer.reserve(n);
+        }
+    }
+
     void init(size_t delay_samples, float feedback) noexcept {
         m_buffer.assign(delay_samples + 1, 0.0f);
         m_index = 0;

@@ -44,6 +44,7 @@ struct eax_context_s {
     bool eax_listener_has_deferred{false};
 
     eax::ReverbDSP fallback_reverb{};
+    uint32_t fallback_sample_rate{44100};
     uint32_t speaker_config{EAX_SPEAKER_CONFIG_HEADPHONE};
     std::mutex config_mutex{};
 

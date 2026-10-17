@@ -284,7 +284,7 @@ int cmd_demo(const std::string& backend, float duration, bool headless, const st
 
     // Configure EAX Environment to REVERB_CAVE
     std::cout << "[*] Configuring EAX 2.0 preset: REVERB_CAVE (decay = 2.91s)...\n";
-    eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 0, nullptr, 0, &eax::PRESET_CAVE, sizeof(eax::PRESET_CAVE));
+    eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 1, nullptr, 0, &eax::PRESET_CAVE, sizeof(eax::PRESET_CAVE));
 
     // Create 3D Sound Buffer with 440 Hz tone pulse
     const float tone_duration = 0.5f;
@@ -426,7 +426,12 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--backend" && i + 1 < argc) {
             backend = argv[++i];
         } else if (arg == "--duration" && i + 1 < argc) {
-            duration = std::stof(argv[++i]);
+            try {
+                duration = std::stof(argv[++i]);
+            } catch (const std::exception&) {
+                std::cerr << "Invalid --duration value: " << argv[i] << "\n";
+                return 1;
+            }
         } else if (arg == "--headless") {
             headless = true;
         } else if (arg == "--output" && i + 1 < argc) {

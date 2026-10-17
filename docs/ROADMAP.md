@@ -12,7 +12,7 @@ This roadmap outlines the development and verification phases for the native Lin
 - Pre-allocated memory arena and lock-free voice pool management.
 - DirectSound3D coordinate transformation pipeline (left-handed to right-handed).
 - Distance attenuation curves (min/max distance, rolloff factor).
-- EAX 1.0, 2.0, 3.0, and 4.0 property translation into OpenAL Soft EFX calls (`AL_EFFECT_EAXREVERB`, `AL_DIRECT_FILTER`, `AL_AUXILIARY_SEND_FILTER`).
+- EAX 1.0 and 2.0 property translation into OpenAL Soft EFX calls (`AL_EFFECT_EAXREVERB`, `AL_DIRECT_FILTER`, `AL_AUXILIARY_SEND_FILTER`).
 - Unit tests in `eax-native/tests/` exercising buffer creation, coordinate conversion, and EAX property queries without requiring Wine.
 
 ### Exit Criteria (Phase 1)

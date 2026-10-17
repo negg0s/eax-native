@@ -1,8 +1,8 @@
 # EAX Native: Linux DirectSound3D & EAX OpenAL Soft Translation Layer
 
-`eax-native` is a native Linux C++20 translation library that routes DirectSound3D spatialization, distance attenuation, and EAX environmental reverberation (EAX 1.0–2.0 with 3.0/4.0 property set handling) directly to OpenAL Soft.
+`eax-native` is a native Linux C++20 translation library that routes DirectSound3D spatialization, distance attenuation, and EAX environmental reverberation (EAX 1.0 and 2.0 property sets; EAX 3.0/4.0 GUIDs are neither advertised nor processed) directly to OpenAL Soft.
 
-It exposes a zero-overhead flat C ABI boundary (`include/eax_native_abi.h`) designed for integration with Wine/Proton shims, PipeWire DSP nodes, and standalone test harnesses.
+It exposes a flat C ABI boundary (`include/eax_native_abi.h`) designed for integration with Wine/Proton shims, PipeWire DSP nodes, and standalone test harnesses.
 
 ---
 
@@ -32,7 +32,7 @@ It exposes a zero-overhead flat C ABI boundary (`include/eax_native_abi.h`) desi
   - Implements named constants and presets (`eax::PRESET_CAVE`, `eax::GUID_EAX20_Listener`, etc.) without magic literals.
 
 - **Offline / Loopback Diagnostics**:
-  - `eax_context_render_offline` leverages `ALC_SOFT_loopback` (`alcRenderSamplesSOFT`) when available to render directly from OpenAL Soft into test buffers.
+  - `eax_context_render_offline` uses `ALC_SOFT_loopback` (`alcRenderSamplesSOFT`) when available to render directly from OpenAL Soft into test buffers; otherwise it falls back to the built-in stereo reverb mixer (`src/eax_reverb.cpp`), which is reconfigured from the active EAX listener properties.
 
 ---
 
@@ -59,9 +59,10 @@ ctest --test-dir build --output-on-failure
 The test suite covers:
 - `test_abi_layout.cpp`: `sizeof` and `offsetof` verification for all boundary POD structures.
 - `test_coordinates.cpp`: Left-to-right handed vector mapping and distance attenuation calculations.
-- `test_spatial_pan_rms.cpp`: Direct OpenAL Soft source positioning and verification that left placement yields $RMS_L \gg RMS_R$ and right yields $RMS_R \gg RMS_L$.
+- `test_spatial_pan_rms.cpp`: Direct OpenAL Soft source positioning and verification that left placement yields RMS_L >> RMS_R and right yields RMS_R >> RMS_L.
 - `test_eax_reverb.cpp`: Verifies OpenAL Soft EFX auxiliary slot allocation and asserts extended reverb tail decay under `eax::PRESET_CAVE`.
-- `test_properties.cpp`: EAX 1.0, 2.0, 3.0, 4.0 `QuerySupport`, `Get`, `Set`, and deferred batch commits.
+- `test_rt_safety.cpp`: Zero dynamic allocations on the rendering thread via allocator interposition, plus SeqLock torn-read checks.
+- `test_properties.cpp`: EAX 1.0/2.0 `QuerySupport`, `Get`/`Set` (whole-struct and individual field property ids), and deferred batch commits.
 
 ---
 

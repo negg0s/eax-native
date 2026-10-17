@@ -6,6 +6,9 @@
 namespace eax {
 
 ReverbDSP::ReverbDSP() noexcept {
+    m_predelay_buffer.reserve(19201);
+    for (auto& comb : m_combs) comb.reserve(19201);
+    for (auto& allpass : m_allpasses) allpass.reserve(19201);
     configure(PRESET_GENERIC, 44100);
 }
 

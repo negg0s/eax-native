@@ -2,7 +2,7 @@
 
 ## 1. Overview & Architectural Stack
 
-The project provides high-performance, low-latency 3D spatial audio and environmental reverberation (EAX 1.0–4.0) for Windows games running under Wine/Proton on Arch Linux. 
+The project provides high-performance, low-latency 3D spatial audio and environmental reverberation (EAX 1.0/2.0) for Windows games running under Wine/Proton on Arch Linux.
 
 Rather than relying on Wine's legacy software downmixing pipeline (`wine/dlls/dsound/mixer.c`) or standard Windows-only wrapper DLLs, the system employs a decoupled split architecture:
 1. **Windows PE Shim (`wine-integration/`)**: A lightweight DirectSound COM implementation compiled as a Windows PE DLL (`dsound.dll`), exposing standard COM interfaces (`IDirectSound8`, `IDirectSoundBuffer8`, `IDirectSound3DListener`, `IDirectSound3DBuffer`, `IKsPropertySet`).
@@ -15,7 +15,7 @@ graph TD
         Game["Game Executable (.exe)"] -->|DirectSound / COM API| Shim["dsound.dll (PE Shim)"]
         Shim -->|IDirectSound8 / IDirectSoundBuffer8| COM_DS["COM Interface Wrapper"]
         Shim -->|IDirectSound3DListener / 3DBuffer| COM_3D["3D Spatializer Wrapper"]
-        Shim -->|IKsPropertySet (EAX 1-4)| COM_EAX["EAX Property Set Wrapper"]
+        Shim -->|IKsPropertySet (EAX 1/2)| COM_EAX["EAX Property Set Wrapper"]
     end
 
     subgraph "C ABI Boundary (Unix Call / Flat C Dynamic Link)"
@@ -137,14 +137,12 @@ Every DirectSound and EAX method called by games maps to a corresponding functio
 
 | Property Set & Scope | Flat C ABI Function | Backend Translation / OpenAL Soft Mapping | Notes |
 | :--- | :--- | :--- | :--- |
-| `QuerySupport` | `eax_prop_query_support` | Returns `KSPROPERTY_SUPPORT_GET \| KSPROPERTY_SUPPORT_SET` | Checks supported EAX GUIDs (1.0, 2.0, 3.0, 4.0). |
-| `Get` (EAX 1.0–3.0 Listener) | `eax_prop_get_listener` | `EAXGetDirect` or extracts from `EFXEAXREVERBPROPERTIES` | Retrieves active room acoustics preset. |
-| `Set` (EAX 1.0–3.0 Listener) | `eax_prop_set_listener` | `EAXSetDirect` / binds to `AL_EFFECT_EAXREVERB` slot | Translates room, reflections, decay, and diffusion. |
-| `Get` (EAX 1.0–3.0 Buffer) | `eax_prop_get_buffer` | `EAXGetDirect` / reads source obstruction parameters | Reads obstruction, occlusion, and direct HF filters. |
-| `Set` (EAX 1.0–3.0 Buffer) | `eax_prop_set_buffer` | `EAXSetDirect` / configures `AL_DIRECT_FILTER` / sends | Applies biquad low-pass occlusion filters. |
-| `Get` / `Set` (EAX 4.0 Context) | `eax_prop_context_eax4` | Configures global context HF reference and primary FX slots | Manages multiple simultaneous EAX 4.0 effect slots. |
-| `Get` / `Set` (EAX 4.0 FX Slot) | `eax_prop_fx_slot_eax4` | Binds aux effect slots `0..3` to dedicated reverb instances | Allows independent environment sends. |
-| `Get` / `Set` (EAX 4.0 Source) | `eax_prop_source_eax4` | Configures multi-slot send levels and occlusion per slot | Dispatches obstruction parameters across FX slots. |
+| `QuerySupport` | `eax_prop_query_support` | Returns `KSPROPERTY_SUPPORT_GET \| KSPROPERTY_SUPPORT_SET` | Advertises only implemented sets: `GUID_EAX10_*`, `GUID_EAX20_*`; EAX 3.0/4.0 GUIDs are reported unsupported. |
+| `Get`/`Set` (EAX 2.0 Listener) | `eax_prop_get` / `eax_prop_set` | `AL_EFFECT_EAXREVERB` parameters on the aux effect slot | Whole-struct (`id=1`), individual fields (`id=2..15`), and deferred/commit (`id |= 0x80000000`, `id=0` commit). |
+| `Get`/`Set` (EAX 2.0 Buffer) | `eax_prop_get` / `eax_prop_set` | `AL_DIRECT_FILTER` / `AL_AUXILIARY_SEND_FILTER` low-pass filters | Whole-struct, individual fields (`id=2..14`), deferred/commit. |
+| `Get`/`Set` (EAX 1.0 Listener) | `eax_prop_get` / `eax_prop_set` | Converted into EAX 2.0 listener state | `dwEnvironment` + decay time mapping. |
+| `Get`/`Set` (EAX 1.0 Buffer) | `eax_prop_get` / `eax_prop_set` | Stores 4-byte reverb mix (`fMix`) in the voice | Dry/wet routing equivalent is not applied yet. |
+| Deferred commit | `eax_listener_commit_deferred` | Applies staged listener/buffer updates atomically | `DSPROPERTY_COMMITDEFERREDSETTINGS` maps to property id `0`. |
 
 ---
 
@@ -155,7 +153,7 @@ The core audio engine operates under strict real-time safety constraints require
 ### 3.1 Zero Per-Stream Dynamic Allocation (`malloc` / `free`)
 1. **Voice Arenas**: All stream voice states (`eax_voice_t`), ring buffers, and sample queues are allocated from a fixed-size, pre-faulted memory arena during system initialization.
 2. **Buffer Lock / Unlock Protocol**: The methods `IDirectSoundBuffer::Lock` and `Unlock` execute millions of times per session during streaming audio playback. Dynamic heap allocations (`malloc`, `calloc`, `new`, `std::vector::resize`) are **strictly prohibited** in these code paths.
-3. **Circular Ring Buffers**: Buffer data pointers returned to applications reference pre-allocated contiguous circular memory maps. Mirrored virtual memory mapping (double-mapping the same physical page consecutively via `mmap`) ensures wrap-around reads and writes require zero manual boundary splitting or copying.
+3. **Circular Ring Buffers**: Buffer data pointers returned to applications reference pre-allocated contiguous circular memory. Locks that would wrap past the buffer end are rejected with `EAX_ERR_INVALID_PARAM`; range-crossing locks must be split into two `Lock` calls by the caller (standard DirectSound single-region shape).
 
 ### 3.2 No Exceptions in Hot Execution Paths
 1. All C ABI functions and internal core routines on audio execution paths are declared `noexcept`.
@@ -171,4 +169,4 @@ The core audio engine operates under strict real-time safety constraints require
    - Every boundary struct must define explicit `static_assert(sizeof(T) == N, "ABI size mismatch for " #T)` ensuring identical byte footprint between 32-bit/64-bit Windows PE callers and Linux ELF implementations.
    - Test suites in `eax-native/tests/` must enforce field-level `offsetof(T, member)` checks against reference Win32 offsets to catch compiler alignment divergence.
 4. **Opaque Handles**: Handles passed across the boundary are typed opaque pointers (`eax_context_h`, `eax_buffer_h`, `eax_listener_h`), isolating internal engine state from caller memory layout.
-5. **Wine Call Compatibility**: Designed for zero-overhead linkage with future Wine PE shims via standard `cdecl` / `stdcall` dynamic linking or Wine's `__wine_unix_call` interface.
+5. **Wine Call Compatibility**: Direct `cdecl` / `stdcall` dynamic linking from the Wine PE shim, no COM marshalling across the boundary.
