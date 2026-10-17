@@ -13,6 +13,14 @@ EAX_API eax_result_t eax_context_create(eax_context_h* out_context) {
     return EAX_OK;
 }
 
+EAX_API eax_result_t eax_context_create_offline(eax_context_h* out_context, uint32_t sample_rate) {
+    if (!out_context) return EAX_ERR_POINTER;
+    auto* ctx = new (std::nothrow) eax_context_s(true, sample_rate ? sample_rate : 44100);
+    if (!ctx) return EAX_ERR_OUT_OF_MEMORY;
+    *out_context = ctx;
+    return EAX_OK;
+}
+
 EAX_API eax_result_t eax_context_destroy(eax_context_h context) {
     if (!context) return EAX_ERR_POINTER;
     delete context;

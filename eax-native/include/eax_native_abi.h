@@ -289,6 +289,7 @@ static_assert(sizeof(eax20_buffer_properties_t) == 52, "eax20_buffer_properties_
 
 /* Context Lifecycle */
 EAX_API eax_result_t eax_context_create(eax_context_h* out_context);
+EAX_API eax_result_t eax_context_create_offline(eax_context_h* out_context, uint32_t sample_rate);
 EAX_API eax_result_t eax_context_destroy(eax_context_h context);
 EAX_API eax_result_t eax_context_get_caps(eax_context_h context, eax_dscaps_t* out_caps);
 EAX_API eax_result_t eax_context_get_speaker_config(eax_context_h context, uint32_t* out_speaker_config);

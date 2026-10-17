@@ -17,9 +17,13 @@ static float calculate_rms_slice(const float* stereo_pcm, size_t start_frame, si
 }
 
 TEST_CASE("EAX Reverb Tail: REVERB_CAVE Preset Extended Decay via OpenAL Soft", "[reverb]") {
+    const uint32_t sample_rate = 44100;
     eax_context_h ctx = nullptr;
-    REQUIRE(eax_context_create(&ctx) == EAX_OK);
+    REQUIRE(eax_context_create_offline(&ctx, sample_rate) == EAX_OK);
+    REQUIRE(ctx != nullptr);
     REQUIRE(ctx->m_al_context != nullptr);
+    REQUIRE(ctx->m_is_loopback);
+    REQUIRE(eax::get_al_ext().alcRenderSamplesSOFT != nullptr);
 
     // Verify OpenAL Soft EFX auxiliary slot and effect handles are allocated
     auto& ext = eax::get_al_ext();
@@ -28,7 +32,6 @@ TEST_CASE("EAX Reverb Tail: REVERB_CAVE Preset Extended Decay via OpenAL Soft", 
         REQUIRE(ctx->m_eax_effect != 0);
     }
 
-    const uint32_t sample_rate = 44100;
     const float burst_duration = 0.03f; // 30 ms impulse tone
     const size_t burst_frames = static_cast<size_t>(sample_rate * burst_duration);
     const size_t buffer_bytes = burst_frames * sizeof(int16_t);

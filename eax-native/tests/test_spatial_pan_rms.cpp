@@ -17,11 +17,13 @@ static float calculate_rms(const float* samples, size_t count, size_t stride) {
 }
 
 TEST_CASE("3D Spatial Panning RMS: 1 kHz Sine Left/Right Ratio via OpenAL Soft", "[pan_rms]") {
-    eax_context_h ctx = nullptr;
-    REQUIRE(eax_context_create(&ctx) == EAX_OK);
-    REQUIRE(ctx->m_al_context != nullptr);
-
     const uint32_t sample_rate = 44100;
+    eax_context_h ctx = nullptr;
+    REQUIRE(eax_context_create_offline(&ctx, sample_rate) == EAX_OK);
+    REQUIRE(ctx != nullptr);
+    REQUIRE(ctx->m_al_context != nullptr);
+    REQUIRE(ctx->m_is_loopback);
+    REQUIRE(eax::get_al_ext().alcRenderSamplesSOFT != nullptr);
     const float duration_sec = 0.5f;
     const size_t frame_count = static_cast<size_t>(sample_rate * duration_sec);
     const size_t buffer_bytes = frame_count * sizeof(int16_t);
