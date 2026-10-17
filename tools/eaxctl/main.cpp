@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdlib>
+#include <cstring>
 #include <sstream>
 #include <chrono>
 #include <thread>
@@ -49,6 +50,26 @@ fs::path find_proton_prefix(const std::string& appid, const std::string& explici
     return candidate_roots[0]; // fallback
 }
 
+// Returns 0x8664 (x64), 0x014C (i386) for a PE image, or 0 if not a PE file
+static uint16_t pe_machine(const fs::path& path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return 0;
+    char dos[64] = {};
+    f.read(dos, sizeof(dos));
+    if (dos[0] != 'M' || dos[1] != 'Z') return 0;
+    uint32_t e_lfanew = 0;
+    std::memcpy(&e_lfanew, dos + 0x3C, 4);
+    if (e_lfanew < 0x40 || e_lfanew > 0x1000) return 0;
+    f.clear();
+    f.seekg(e_lfanew, std::ios::beg);
+    char pe_hdr[8] = {};
+    f.read(pe_hdr, sizeof(pe_hdr));
+    if (pe_hdr[0] != 'P' || pe_hdr[1] != 'E' || pe_hdr[2] != '\0' || pe_hdr[3] != '\0') return 0;
+    uint16_t machine = 0;
+    std::memcpy(&machine, pe_hdr + 4, 2);
+    return machine;
+}
+
 int cmd_install(const std::string& appid, const std::string& explicit_prefix) {
     if (appid.empty() && explicit_prefix.empty()) {
         std::cerr << "Error: --appid <steam_appid> or --prefix <path> is required for install.\n";
@@ -69,23 +90,31 @@ int cmd_install(const std::string& appid, const std::string& explicit_prefix) {
 
     // Locate built dsound.dll shim
     std::vector<fs::path> shim_locations = {
+        "./prebuilt/pe64/dsound.dll",
+        "./prebuilt/pe32/dsound.dll",
         "./build-pe64/wine-integration/dsound.dll",
         "./build-pe32/wine-integration/dsound.dll",
         "./wine-integration/dsound.dll",
         "./build/wine-integration/dsound.dll",
         "./build/dsound.dll",
+        "/usr/lib/eax-native/dsound64.dll",
+        "/usr/lib/eax-native/dsound32.dll",
         "/usr/lib/eax-native/dsound.dll"
     };
 
-    fs::path found_shim;
+    fs::path shim_x64;
+    fs::path shim_x86;
     for (const auto& loc : shim_locations) {
-        if (fs::exists(loc)) {
-            found_shim = loc;
-            break;
+        if (!fs::exists(loc)) continue;
+        const uint16_t machine = pe_machine(loc);
+        if (machine == 0x8664) {
+            if (shim_x64.empty()) shim_x64 = loc;
+        } else if (machine == 0x014C) {
+            if (shim_x86.empty()) shim_x86 = loc;
         }
     }
 
-    if (found_shim.empty()) {
+    if (shim_x64.empty() && shim_x86.empty()) {
         std::vector<fs::path> elf_locations = {
             "./build/wine-integration/dsound.so",
             "./wine-integration/dsound.so",
@@ -112,10 +141,19 @@ int cmd_install(const std::string& appid, const std::string& explicit_prefix) {
         return 1;
     }
 
-    std::cout << "[eaxctl] Copying dsound.dll from " << found_shim.string() << " to prefix...\n";
     try {
-        if (fs::exists(sys32)) fs::copy_file(found_shim, sys32 / "dsound.dll", fs::copy_options::overwrite_existing);
-        if (fs::exists(syswow64)) fs::copy_file(found_shim, syswow64 / "dsound.dll", fs::copy_options::overwrite_existing);
+        if (shim_x64.empty()) {
+            std::cerr << "[eaxctl] Warning: 64-bit dsound.dll shim missing; 64-bit games will not use eax-native.\n";
+        } else if (fs::exists(sys32)) {
+            std::cout << "[eaxctl] Installing 64-bit dsound.dll (system32) from " << shim_x64.string() << "\n";
+            fs::copy_file(shim_x64, sys32 / "dsound.dll", fs::copy_options::overwrite_existing);
+        }
+        if (shim_x86.empty()) {
+            std::cerr << "[eaxctl] Warning: 32-bit dsound.dll shim missing; 32-bit games will not use eax-native.\n";
+        } else if (fs::exists(syswow64)) {
+            std::cout << "[eaxctl] Installing 32-bit dsound.dll (syswow64) from " << shim_x86.string() << "\n";
+            fs::copy_file(shim_x86, syswow64 / "dsound.dll", fs::copy_options::overwrite_existing);
+        }
     } catch (const std::exception& e) {
         std::cerr << "[eaxctl] Warning during file copy: " << e.what() << "\n";
     }
@@ -176,8 +214,16 @@ int cmd_status(const std::string& appid, const std::string& explicit_prefix) {
 
     fs::path dsound64 = prefix / "drive_c/windows/system32/dsound.dll";
     fs::path dsound32 = prefix / "drive_c/windows/syswow64/dsound.dll";
-    std::cout << "Shim 64-bit (system32): " << (fs::exists(dsound64) ? "Installed" : "Not Present") << "\n";
-    std::cout << "Shim 32-bit (syswow64): " << (fs::exists(dsound32) ? "Installed" : "Not Present") << "\n";
+    const uint16_t m64 = fs::exists(dsound64) ? pe_machine(dsound64) : 0;
+    const uint16_t m32 = fs::exists(dsound32) ? pe_machine(dsound32) : 0;
+    std::cout << "Shim 64-bit (system32): "
+              << (m64 == 0x8664 ? "Installed (x64)"
+                  : fs::exists(dsound64) ? (m32 == 0x014C ? "WRONG ARCH (32-bit in system32)" : "Not a PE file")
+                  : "Not Present") << "\n";
+    std::cout << "Shim 32-bit (syswow64): "
+              << (m32 == 0x014C ? "Installed (x86)"
+                  : fs::exists(dsound32) ? (m64 == 0x8664 ? "WRONG ARCH (64-bit in syswow64)" : "Not a PE file")
+                  : "Not Present") << "\n";
     return 0;
 }
 
