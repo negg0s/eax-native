@@ -60,6 +60,8 @@ int cmd_install(const std::string& appid, const std::string& explicit_prefix) {
 
     // Locate built dsound.dll shim
     std::vector<fs::path> shim_locations = {
+        "./build-pe64/wine-integration/dsound.dll",
+        "./build-pe32/wine-integration/dsound.dll",
         "./wine-integration/dsound.dll",
         "./build/wine-integration/dsound.dll",
         "./build/dsound.dll",
@@ -75,18 +77,38 @@ int cmd_install(const std::string& appid, const std::string& explicit_prefix) {
     }
 
     if (found_shim.empty()) {
-        std::cout << "[eaxctl] Notice: Pre-built dsound.dll not found in default build trees. Placing shim placeholder...\n";
-        found_shim = sys32 / "dsound.dll";
-        std::ofstream placeholder(found_shim, std::ios::binary);
-        placeholder << "EAX_NATIVE_DSOUND_SHIM";
-    } else {
-        std::cout << "[eaxctl] Copying dsound.dll from " << found_shim.string() << " to prefix...\n";
-        try {
-            if (fs::exists(sys32)) fs::copy_file(found_shim, sys32 / "dsound.dll", fs::copy_options::overwrite_existing);
-            if (fs::exists(syswow64)) fs::copy_file(found_shim, syswow64 / "dsound.dll", fs::copy_options::overwrite_existing);
-        } catch (const std::exception& e) {
-            std::cerr << "[eaxctl] Warning during file copy: " << e.what() << "\n";
+        std::vector<fs::path> elf_locations = {
+            "./build/wine-integration/dsound.so",
+            "./wine-integration/dsound.so",
+            "./build/dsound.so",
+            "/usr/lib/eax-native/dsound.so"
+        };
+        fs::path found_elf;
+        for (const auto& loc : elf_locations) {
+            if (fs::exists(loc)) {
+                found_elf = loc;
+                break;
+            }
         }
+
+        std::cerr << "[eaxctl] Error: Windows PE 'dsound.dll' shim not found.\n";
+        if (!found_elf.empty()) {
+            std::cerr << "[eaxctl] Notice: Found Linux ELF shared library at '" << found_elf.string() << "'.\n"
+                      << "[eaxctl] Proton and Wine require a Windows PE binary (dsound.dll), not an ELF library (.so).\n";
+        }
+        std::cerr << "[eaxctl] Please cross-compile the Windows PE shim first using:\n"
+                  << "         ./ci/build_windows_pe.sh\n"
+                  << "       or:\n"
+                  << "         cmake -B build-pe64 -DCMAKE_TOOLCHAIN_FILE=cmake/mingw64.cmake && cmake --build build-pe64 --target wine_dsound\n";
+        return 1;
+    }
+
+    std::cout << "[eaxctl] Copying dsound.dll from " << found_shim.string() << " to prefix...\n";
+    try {
+        if (fs::exists(sys32)) fs::copy_file(found_shim, sys32 / "dsound.dll", fs::copy_options::overwrite_existing);
+        if (fs::exists(syswow64)) fs::copy_file(found_shim, syswow64 / "dsound.dll", fs::copy_options::overwrite_existing);
+    } catch (const std::exception& e) {
+        std::cerr << "[eaxctl] Warning during file copy: " << e.what() << "\n";
     }
 
     // Update user.reg with dsound override
