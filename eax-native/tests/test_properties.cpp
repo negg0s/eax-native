@@ -51,7 +51,7 @@ TEST_CASE("EAX Property Sets: IKsPropertySet Query, Get, Set, and Deferred Commi
         REQUIRE((support & (EAX_KSPROPERTY_SUPPORT_GET | EAX_KSPROPERTY_SUPPORT_SET)) != 0);
 
         REQUIRE(eax_prop_query_support(ctx, buf, &guid_eax40_context, 0, &support) == EAX_ERR_PROP_UNSUPPORTED);
-    }
+
         REQUIRE(eax_prop_query_support(ctx, buf, &guid_unknown, 0, &support) == EAX_ERR_PROP_UNSUPPORTED);
     }
 
