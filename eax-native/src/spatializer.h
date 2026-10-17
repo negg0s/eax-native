@@ -10,7 +10,6 @@ namespace eax {
 // Mathematical conversion utilities
 inline float mb_to_gain(int32_t mb) noexcept {
     if (mb <= -10000) return 0.0f;
-    if (mb >= 0) return 1.0f;
     return std::pow(10.0f, static_cast<float>(mb) / 2000.0f);
 }
 
