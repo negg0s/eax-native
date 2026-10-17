@@ -2,10 +2,14 @@
 #include <vector>
 #include <cmath>
 #include <fstream>
+#include <chrono>
+#include <thread>
 #include <cstdint>
+#include <algorithm>
 #include "eax_native_abi.h"
+#include "eax_reverb.h"
 
-// Minimal 16-bit stereo WAV file writer
+// Optional WAV file writer for headless verification
 static bool write_wav_file(const char* filepath, const float* stereo_pcm, size_t frame_count, uint32_t sample_rate) {
     std::ofstream out(filepath, std::ios::binary);
     if (!out) return false;
@@ -17,15 +21,12 @@ static bool write_wav_file(const char* filepath, const float* stereo_pcm, size_t
     const uint32_t data_bytes = static_cast<uint32_t>(frame_count * block_align);
     const uint32_t chunk_size = 36 + data_bytes;
 
-    // RIFF header
     out.write("RIFF", 4);
     out.write(reinterpret_cast<const char*>(&chunk_size), 4);
     out.write("WAVE", 4);
-
-    // fmt subchunk
     out.write("fmt ", 4);
     uint32_t subchunk1_size = 16;
-    uint16_t audio_format = 1; // PCM
+    uint16_t audio_format = 1;
     uint16_t channels_u16 = static_cast<uint16_t>(num_channels);
     out.write(reinterpret_cast<const char*>(&subchunk1_size), 4);
     out.write(reinterpret_cast<const char*>(&audio_format), 2);
@@ -36,8 +37,6 @@ static bool write_wav_file(const char* filepath, const float* stereo_pcm, size_t
     out.write(reinterpret_cast<const char*>(&block_align_u16), 2);
     uint16_t bits_u16 = static_cast<uint16_t>(bits_per_sample);
     out.write(reinterpret_cast<const char*>(&bits_u16), 2);
-
-    // data subchunk
     out.write("data", 4);
     out.write(reinterpret_cast<const char*>(&data_bytes), 4);
 
@@ -51,29 +50,22 @@ static bool write_wav_file(const char* filepath, const float* stereo_pcm, size_t
 
 int main(int argc, char** argv) {
     std::cout << "====================================================\n";
-    std::cout << "   EAX Native 3D Audio & Reverb Demo (Phase 1)     \n";
+    std::cout << "   EAX Native Realtime 3D Audio Demo (Phase 1)     \n";
     std::cout << "====================================================\n";
 
     eax_context_h ctx = nullptr;
     if (eax_context_create(&ctx) != EAX_OK) {
-        std::cerr << "Failed to create EAX context!\n";
+        std::cerr << "[-] Failed to initialize OpenAL audio backend context!\n";
         return 1;
     }
 
-    // Configure EAX Environment to REVERB_CAVE
-    std::cout << "[*] Configuring EAX 2.0 preset: REVERB_CAVE (decay = 2.91s)...\n";
-    eax20_listener_properties_t cave_props = {
-        -1000, 0, 0.0f, 2.91f, 1.30f, -602, 0.015f, -302, 0.022f,
-        EAX_ENVIRONMENT_CAVE, 14.6f, 1.0f, -5.0f, 0x3F
-    };
-    eax_guid_t guid_eax20_listener = {
-        0x0306A6A8, 0xB224, 0x11D2, {0x99, 0xE5, 0x00, 0x00, 0xE8, 0xD8, 0xC7, 0x22}
-    };
-    eax_prop_set(ctx, nullptr, &guid_eax20_listener, 0, nullptr, 0, &cave_props, sizeof(cave_props));
+    // Configure EAX Environment to REVERB_CAVE using named constants from eax_reverb.h
+    std::cout << "[*] Configuring OpenAL Soft EAX 2.0 preset: REVERB_CAVE (decay = 2.91s)...\n";
+    eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 0, nullptr, 0, &eax::PRESET_CAVE, sizeof(eax::PRESET_CAVE));
 
     // Create 3D Sound Buffer
     const uint32_t sample_rate = 44100;
-    const float duration_sec = 1.0f;
+    const float duration_sec = 0.5f;
     const size_t tone_frames = static_cast<size_t>(sample_rate * duration_sec);
     const size_t buffer_bytes = tone_frames * sizeof(int16_t);
 
@@ -93,12 +85,12 @@ int main(int argc, char** argv) {
 
     eax_buffer_h buf = nullptr;
     if (eax_buffer_create(ctx, &caps, &format, &buf) != EAX_OK) {
-        std::cerr << "Failed to create 3D buffer!\n";
+        std::cerr << "[-] Failed to create 3D buffer!\n";
         eax_context_destroy(ctx);
         return 1;
     }
 
-    // Fill buffer with 440 Hz pulse wave
+    // Fill buffer with 440 Hz tone pulse
     void *p1 = nullptr, *p2 = nullptr;
     uint32_t b1 = 0, b2 = 0;
     eax_buffer_lock(buf, 0, static_cast<uint32_t>(buffer_bytes), &p1, &b1, &p2, &b2, 0);
@@ -113,48 +105,51 @@ int main(int argc, char** argv) {
     }
     eax_buffer_unlock(buf, p1, b1, p2, b2);
 
-    // Simulate 3D Fly-by from (-20, 0, 5) to (+20, 0, 5) over 4 seconds
-    std::cout << "[*] Simulating 3D fly-by trajectory (left -> right) with cave reverb tail...\n";
-    const size_t total_render_seconds = 6; // 4s sound + 2s reverb tail
-    const size_t total_frames = total_render_seconds * sample_rate;
-    std::vector<float> output_pcm(total_frames * 2, 0.0f);
+    std::cout << "[*] Playing 3D fly-by sound through OpenAL audio device in real time...\n";
+    std::cout << "[*] Trajectory: (-20m, 0m, 5m) -> (+20m, 0m, 5m). Listen for stereo panning and cave reverb!\n";
 
-    // Start playing
+    // Start playback through OpenAL device
     eax_buffer_play(buf, 0, EAX_DSBPLAY_LOOPING);
 
-    const size_t chunk_size = 512;
-    size_t rendered_frames = 0;
+    const auto start_time = std::chrono::steady_clock::now();
+    const float flyby_duration = 3.5f;
 
-    while (rendered_frames < total_frames) {
-        const size_t current_chunk = std::min(chunk_size, total_frames - rendered_frames);
-        const float time_sec = static_cast<float>(rendered_frames) / static_cast<float>(sample_rate);
-
-        // Update 3D position
-        if (time_sec <= 4.0f) {
-            const float progress = time_sec / 4.0f; // [0, 1]
-            const float x = -20.0f + progress * 40.0f;
-            const float y = 0.0f;
-            const float z = 5.0f;
-            eax_buffer_set_3d_position(buf, x, y, z, EAX_DS3D_IMMEDIATE);
-        } else {
-            // Stop buffer to let reverb tail decay naturally
-            eax_buffer_stop(buf);
+    while (true) {
+        const auto now = std::chrono::steady_clock::now();
+        const float elapsed = std::chrono::duration<float>(now - start_time).count();
+        if (elapsed > flyby_duration) {
+            break;
         }
 
-        eax_context_render_offline(ctx, output_pcm.data() + rendered_frames * 2, current_chunk, sample_rate);
-        rendered_frames += current_chunk;
+        const float progress = elapsed / flyby_duration;
+        const float x = -20.0f + progress * 40.0f;
+        const float y = 0.0f;
+        const float z = 5.0f;
+
+        eax_buffer_set_3d_position(buf, x, y, z, EAX_DS3D_IMMEDIATE);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
 
-    const char* output_file = (argc > 1) ? argv[1] : "eax_flyby_cave_demo.wav";
-    std::cout << "[*] Writing rendered output to " << output_file << "...\n";
-    if (write_wav_file(output_file, output_pcm.data(), total_frames, sample_rate)) {
-        std::cout << "[+] Demo audio generated successfully (" << total_render_seconds << "s, 44.1kHz 16-bit stereo)!\n";
-    } else {
-        std::cerr << "[-] Failed to write output WAV file!\n";
+    // Stop source sound to let OpenAL Soft EAX reverb tail ring out
+    std::cout << "[*] Sound source stopped; listening to EAX reverb tail decay...\n";
+    eax_buffer_stop(buf);
+
+    // Sleep 2.5 seconds to hear the cave reverb tail decaying through the speakers/headphones
+    std::this_thread::sleep_for(std::chrono::milliseconds(2500));
+
+    // Optional: write offline rendered copy if user explicitly passed a filepath
+    if (argc > 1) {
+        std::cout << "[*] Writing offline diagnostic WAV render to " << argv[1] << "...\n";
+        const size_t total_frames = sample_rate * 5;
+        std::vector<float> pcm(total_frames * 2, 0.0f);
+        eax_context_render_offline(ctx, pcm.data(), total_frames, sample_rate);
+        write_wav_file(argv[1], pcm.data(), total_frames, sample_rate);
     }
+
+    std::cout << "[+] Realtime OpenAL playback complete.\n";
 
     eax_buffer_destroy(buf);
     eax_context_destroy(ctx);
-    std::cout << "[+] Done.\n";
     return 0;
 }
