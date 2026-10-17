@@ -191,3 +191,63 @@ TEST_CASE("RT Safety: Lock-free voice pool state transitions & absence of deadlo
 
     eax_context_destroy(ctx);
 }
+
+TEST_CASE("RT Safety: Lock-free SeqLock prevents torn reads during high-frequency concurrent updates", "[rt_safety]") {
+    eax_context_h ctx = nullptr;
+    REQUIRE(eax_context_create_offline(&ctx, 48000) == EAX_OK);
+
+    eax_dsbcaps_t caps{};
+    caps.dwSize = sizeof(eax_dsbcaps_t);
+    caps.dwFlags = EAX_DSBCAPS_CTRL3D;
+    caps.dwBufferBytes = 4096;
+
+    eax_waveformat_ex_t format{};
+    format.wFormatTag = 1;
+    format.nChannels = 1;
+    format.nSamplesPerSec = 48000;
+    format.wBitsPerSample = 16;
+    format.nBlockAlign = 2;
+    format.nAvgBytesPerSec = 48000 * 2;
+
+    eax_buffer_h buf = nullptr;
+    REQUIRE(eax_buffer_create(ctx, &caps, &format, &buf) == EAX_OK);
+
+    std::atomic<bool> stop_flag{false};
+    std::atomic<uint64_t> torn_reads{0};
+    std::atomic<uint64_t> successful_reads{0};
+
+    // Reader thread: continuously takes snapshots and asserts internal consistency (all coordinates equal)
+    std::thread reader([&]() {
+        while (!stop_flag.load(std::memory_order_relaxed)) {
+            eax_vector_t l_pos{};
+            eax_vector_t b_pos{};
+            eax_listener_get_position(ctx, &l_pos);
+            eax_buffer_get_3d_position(buf, &b_pos);
+
+            if (l_pos.x != l_pos.y || l_pos.y != l_pos.z) {
+                torn_reads.fetch_add(1, std::memory_order_relaxed);
+            }
+            if (b_pos.x != b_pos.y || b_pos.y != b_pos.z) {
+                torn_reads.fetch_add(1, std::memory_order_relaxed);
+            }
+            successful_reads.fetch_add(1, std::memory_order_relaxed);
+        }
+    });
+
+    // Writer thread: rapidly updates multi-field structs with distinct values
+    for (int i = 1; i <= 20000; ++i) {
+        const float val = static_cast<float>(i);
+        eax_listener_set_position(ctx, val, val, val, EAX_DS3D_IMMEDIATE);
+        eax_buffer_set_3d_position(buf, val, val, val, EAX_DS3D_IMMEDIATE);
+    }
+
+    stop_flag.store(true, std::memory_order_relaxed);
+    reader.join();
+
+    REQUIRE(successful_reads.load() > 0);
+    REQUIRE(torn_reads.load() == 0);
+
+    eax_buffer_destroy(buf);
+    eax_context_destroy(ctx);
+}
+

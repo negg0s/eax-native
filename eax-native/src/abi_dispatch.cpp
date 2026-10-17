@@ -74,7 +74,7 @@ EAX_API eax_result_t eax_context_render_offline(eax_context_h context, float* ou
 
 EAX_API eax_result_t eax_listener_get_all_parameters(eax_context_h context, eax_ds3dlistener_t* out_params) {
     if (!context || !out_params) return EAX_ERR_POINTER;
-    *out_params = context->listener;
+    *out_params = context->get_listener_snapshot();
     return EAX_OK;
 }
 
@@ -84,7 +84,9 @@ EAX_API eax_result_t eax_listener_set_all_parameters(eax_context_h context, cons
         context->listener_deferred = *params;
         context->listener_has_deferred = true;
     } else {
+        context->listener_seqlock.write_begin();
         context->listener = *params;
+        context->listener_seqlock.write_end();
         context->sync_listener_to_openal();
     }
     return EAX_OK;
@@ -92,7 +94,7 @@ EAX_API eax_result_t eax_listener_set_all_parameters(eax_context_h context, cons
 
 EAX_API eax_result_t eax_listener_get_position(eax_context_h context, eax_vector_t* out_pos) {
     if (!context || !out_pos) return EAX_ERR_POINTER;
-    *out_pos = context->listener.vPosition;
+    *out_pos = context->get_listener_snapshot().vPosition;
     return EAX_OK;
 }
 
@@ -102,7 +104,9 @@ EAX_API eax_result_t eax_listener_set_position(eax_context_h context, float x, f
         context->listener_deferred.vPosition = { x, y, z };
         context->listener_has_deferred = true;
     } else {
+        context->listener_seqlock.write_begin();
         context->listener.vPosition = { x, y, z };
+        context->listener_seqlock.write_end();
         context->sync_listener_to_openal();
     }
     return EAX_OK;
@@ -110,7 +114,7 @@ EAX_API eax_result_t eax_listener_set_position(eax_context_h context, float x, f
 
 EAX_API eax_result_t eax_listener_get_velocity(eax_context_h context, eax_vector_t* out_vel) {
     if (!context || !out_vel) return EAX_ERR_POINTER;
-    *out_vel = context->listener.vVelocity;
+    *out_vel = context->get_listener_snapshot().vVelocity;
     return EAX_OK;
 }
 
@@ -120,7 +124,9 @@ EAX_API eax_result_t eax_listener_set_velocity(eax_context_h context, float x, f
         context->listener_deferred.vVelocity = { x, y, z };
         context->listener_has_deferred = true;
     } else {
+        context->listener_seqlock.write_begin();
         context->listener.vVelocity = { x, y, z };
+        context->listener_seqlock.write_end();
         context->sync_listener_to_openal();
     }
     return EAX_OK;
@@ -128,8 +134,9 @@ EAX_API eax_result_t eax_listener_set_velocity(eax_context_h context, float x, f
 
 EAX_API eax_result_t eax_listener_get_orientation(eax_context_h context, eax_vector_t* out_front, eax_vector_t* out_top) {
     if (!context) return EAX_ERR_POINTER;
-    if (out_front) *out_front = context->listener.vOrientFront;
-    if (out_top) *out_top = context->listener.vOrientTop;
+    const auto snap = context->get_listener_snapshot();
+    if (out_front) *out_front = snap.vOrientFront;
+    if (out_top) *out_top = snap.vOrientTop;
     return EAX_OK;
 }
 
@@ -140,8 +147,10 @@ EAX_API eax_result_t eax_listener_set_orientation(eax_context_h context, float f
         context->listener_deferred.vOrientTop = { tx, ty, tz };
         context->listener_has_deferred = true;
     } else {
+        context->listener_seqlock.write_begin();
         context->listener.vOrientFront = { fx, fy, fz };
         context->listener.vOrientTop = { tx, ty, tz };
+        context->listener_seqlock.write_end();
         context->sync_listener_to_openal();
     }
     return EAX_OK;
@@ -149,7 +158,7 @@ EAX_API eax_result_t eax_listener_set_orientation(eax_context_h context, float f
 
 EAX_API eax_result_t eax_listener_get_distance_factor(eax_context_h context, float* out_factor) {
     if (!context || !out_factor) return EAX_ERR_POINTER;
-    *out_factor = context->listener.flDistanceFactor;
+    *out_factor = context->get_listener_snapshot().flDistanceFactor;
     return EAX_OK;
 }
 
@@ -159,7 +168,9 @@ EAX_API eax_result_t eax_listener_set_distance_factor(eax_context_h context, flo
         context->listener_deferred.flDistanceFactor = factor;
         context->listener_has_deferred = true;
     } else {
+        context->listener_seqlock.write_begin();
         context->listener.flDistanceFactor = factor;
+        context->listener_seqlock.write_end();
         context->sync_listener_to_openal();
     }
     return EAX_OK;
@@ -167,7 +178,7 @@ EAX_API eax_result_t eax_listener_set_distance_factor(eax_context_h context, flo
 
 EAX_API eax_result_t eax_listener_get_rolloff_factor(eax_context_h context, float* out_factor) {
     if (!context || !out_factor) return EAX_ERR_POINTER;
-    *out_factor = context->listener.flRolloffFactor;
+    *out_factor = context->get_listener_snapshot().flRolloffFactor;
     return EAX_OK;
 }
 
@@ -177,7 +188,9 @@ EAX_API eax_result_t eax_listener_set_rolloff_factor(eax_context_h context, floa
         context->listener_deferred.flRolloffFactor = factor;
         context->listener_has_deferred = true;
     } else {
+        context->listener_seqlock.write_begin();
         context->listener.flRolloffFactor = factor;
+        context->listener_seqlock.write_end();
         context->sync_listener_to_openal();
     }
     return EAX_OK;
@@ -185,7 +198,7 @@ EAX_API eax_result_t eax_listener_set_rolloff_factor(eax_context_h context, floa
 
 EAX_API eax_result_t eax_listener_get_doppler_factor(eax_context_h context, float* out_factor) {
     if (!context || !out_factor) return EAX_ERR_POINTER;
-    *out_factor = context->listener.flDopplerFactor;
+    *out_factor = context->get_listener_snapshot().flDopplerFactor;
     return EAX_OK;
 }
 
@@ -195,7 +208,9 @@ EAX_API eax_result_t eax_listener_set_doppler_factor(eax_context_h context, floa
         context->listener_deferred.flDopplerFactor = factor;
         context->listener_has_deferred = true;
     } else {
+        context->listener_seqlock.write_begin();
         context->listener.flDopplerFactor = factor;
+        context->listener_seqlock.write_end();
         context->sync_listener_to_openal();
     }
     return EAX_OK;
@@ -253,7 +268,9 @@ EAX_API eax_result_t eax_buffer_duplicate(eax_context_h context, eax_buffer_h so
     voice->volume_mb.store(source_buffer->volume_mb.load(std::memory_order_relaxed), std::memory_order_relaxed);
     voice->pan_mb.store(source_buffer->pan_mb.load(std::memory_order_relaxed), std::memory_order_relaxed);
     voice->frequency_hz.store(source_buffer->frequency_hz.load(std::memory_order_relaxed), std::memory_order_relaxed);
-    voice->ds3d = source_buffer->ds3d;
+    voice->ds3d_seqlock.write_begin();
+    voice->ds3d = source_buffer->get_ds3d_snapshot();
+    voice->ds3d_seqlock.write_end();
 
     voice->sample_buffer.initialize(source_buffer->sample_buffer.data(), source_buffer->sample_buffer.capacity());
     voice->init_openal(context);
@@ -415,7 +432,7 @@ EAX_API eax_result_t eax_buffer_set_frequency(eax_buffer_h buffer, uint32_t freq
 
 EAX_API eax_result_t eax_buffer_get_3d_all_parameters(eax_buffer_h buffer, eax_ds3dbuffer_t* out_params) {
     if (!buffer || !out_params) return EAX_ERR_POINTER;
-    *out_params = buffer->ds3d;
+    *out_params = buffer->get_ds3d_snapshot();
     return EAX_OK;
 }
 
@@ -425,7 +442,9 @@ EAX_API eax_result_t eax_buffer_set_3d_all_parameters(eax_buffer_h buffer, const
         buffer->ds3d_deferred = *params;
         buffer->ds3d_has_deferred = true;
     } else {
+        buffer->ds3d_seqlock.write_begin();
         buffer->ds3d = *params;
+        buffer->ds3d_seqlock.write_end();
         buffer->sync_to_openal();
     }
     return EAX_OK;
@@ -433,7 +452,7 @@ EAX_API eax_result_t eax_buffer_set_3d_all_parameters(eax_buffer_h buffer, const
 
 EAX_API eax_result_t eax_buffer_get_3d_position(eax_buffer_h buffer, eax_vector_t* out_pos) {
     if (!buffer || !out_pos) return EAX_ERR_POINTER;
-    *out_pos = buffer->ds3d.vPosition;
+    *out_pos = buffer->get_ds3d_snapshot().vPosition;
     return EAX_OK;
 }
 
@@ -443,7 +462,9 @@ EAX_API eax_result_t eax_buffer_set_3d_position(eax_buffer_h buffer, float x, fl
         buffer->ds3d_deferred.vPosition = { x, y, z };
         buffer->ds3d_has_deferred = true;
     } else {
+        buffer->ds3d_seqlock.write_begin();
         buffer->ds3d.vPosition = { x, y, z };
+        buffer->ds3d_seqlock.write_end();
         buffer->sync_to_openal();
     }
     return EAX_OK;
@@ -451,7 +472,7 @@ EAX_API eax_result_t eax_buffer_set_3d_position(eax_buffer_h buffer, float x, fl
 
 EAX_API eax_result_t eax_buffer_get_3d_velocity(eax_buffer_h buffer, eax_vector_t* out_vel) {
     if (!buffer || !out_vel) return EAX_ERR_POINTER;
-    *out_vel = buffer->ds3d.vVelocity;
+    *out_vel = buffer->get_ds3d_snapshot().vVelocity;
     return EAX_OK;
 }
 
@@ -461,7 +482,9 @@ EAX_API eax_result_t eax_buffer_set_3d_velocity(eax_buffer_h buffer, float x, fl
         buffer->ds3d_deferred.vVelocity = { x, y, z };
         buffer->ds3d_has_deferred = true;
     } else {
+        buffer->ds3d_seqlock.write_begin();
         buffer->ds3d.vVelocity = { x, y, z };
+        buffer->ds3d_seqlock.write_end();
         buffer->sync_to_openal();
     }
     return EAX_OK;
@@ -469,8 +492,9 @@ EAX_API eax_result_t eax_buffer_set_3d_velocity(eax_buffer_h buffer, float x, fl
 
 EAX_API eax_result_t eax_buffer_get_3d_cone_angles(eax_buffer_h buffer, uint32_t* out_inside, uint32_t* out_outside) {
     if (!buffer) return EAX_ERR_POINTER;
-    if (out_inside) *out_inside = buffer->ds3d.dwInsideConeAngle;
-    if (out_outside) *out_outside = buffer->ds3d.dwOutsideConeAngle;
+    const auto snap = buffer->get_ds3d_snapshot();
+    if (out_inside) *out_inside = snap.dwInsideConeAngle;
+    if (out_outside) *out_outside = snap.dwOutsideConeAngle;
     return EAX_OK;
 }
 
@@ -481,8 +505,10 @@ EAX_API eax_result_t eax_buffer_set_3d_cone_angles(eax_buffer_h buffer, uint32_t
         buffer->ds3d_deferred.dwOutsideConeAngle = outside;
         buffer->ds3d_has_deferred = true;
     } else {
+        buffer->ds3d_seqlock.write_begin();
         buffer->ds3d.dwInsideConeAngle = inside;
         buffer->ds3d.dwOutsideConeAngle = outside;
+        buffer->ds3d_seqlock.write_end();
         buffer->sync_to_openal();
     }
     return EAX_OK;
@@ -490,7 +516,7 @@ EAX_API eax_result_t eax_buffer_set_3d_cone_angles(eax_buffer_h buffer, uint32_t
 
 EAX_API eax_result_t eax_buffer_get_3d_cone_orientation(eax_buffer_h buffer, eax_vector_t* out_orientation) {
     if (!buffer || !out_orientation) return EAX_ERR_POINTER;
-    *out_orientation = buffer->ds3d.vConeOrientation;
+    *out_orientation = buffer->get_ds3d_snapshot().vConeOrientation;
     return EAX_OK;
 }
 
@@ -500,7 +526,9 @@ EAX_API eax_result_t eax_buffer_set_3d_cone_orientation(eax_buffer_h buffer, flo
         buffer->ds3d_deferred.vConeOrientation = { x, y, z };
         buffer->ds3d_has_deferred = true;
     } else {
+        buffer->ds3d_seqlock.write_begin();
         buffer->ds3d.vConeOrientation = { x, y, z };
+        buffer->ds3d_seqlock.write_end();
         buffer->sync_to_openal();
     }
     return EAX_OK;
@@ -508,7 +536,7 @@ EAX_API eax_result_t eax_buffer_set_3d_cone_orientation(eax_buffer_h buffer, flo
 
 EAX_API eax_result_t eax_buffer_get_3d_cone_outside_volume(eax_buffer_h buffer, int32_t* out_volume_mb) {
     if (!buffer || !out_volume_mb) return EAX_ERR_POINTER;
-    *out_volume_mb = buffer->ds3d.lConeOutsideVolume;
+    *out_volume_mb = buffer->get_ds3d_snapshot().lConeOutsideVolume;
     return EAX_OK;
 }
 
@@ -518,7 +546,9 @@ EAX_API eax_result_t eax_buffer_set_3d_cone_outside_volume(eax_buffer_h buffer, 
         buffer->ds3d_deferred.lConeOutsideVolume = volume_mb;
         buffer->ds3d_has_deferred = true;
     } else {
+        buffer->ds3d_seqlock.write_begin();
         buffer->ds3d.lConeOutsideVolume = volume_mb;
+        buffer->ds3d_seqlock.write_end();
         buffer->sync_to_openal();
     }
     return EAX_OK;
@@ -526,7 +556,7 @@ EAX_API eax_result_t eax_buffer_set_3d_cone_outside_volume(eax_buffer_h buffer, 
 
 EAX_API eax_result_t eax_buffer_get_3d_min_distance(eax_buffer_h buffer, float* out_dist) {
     if (!buffer || !out_dist) return EAX_ERR_POINTER;
-    *out_dist = buffer->ds3d.flMinDistance;
+    *out_dist = buffer->get_ds3d_snapshot().flMinDistance;
     return EAX_OK;
 }
 
@@ -536,7 +566,9 @@ EAX_API eax_result_t eax_buffer_set_3d_min_distance(eax_buffer_h buffer, float d
         buffer->ds3d_deferred.flMinDistance = dist;
         buffer->ds3d_has_deferred = true;
     } else {
+        buffer->ds3d_seqlock.write_begin();
         buffer->ds3d.flMinDistance = dist;
+        buffer->ds3d_seqlock.write_end();
         buffer->sync_to_openal();
     }
     return EAX_OK;
@@ -544,7 +576,7 @@ EAX_API eax_result_t eax_buffer_set_3d_min_distance(eax_buffer_h buffer, float d
 
 EAX_API eax_result_t eax_buffer_get_3d_max_distance(eax_buffer_h buffer, float* out_dist) {
     if (!buffer || !out_dist) return EAX_ERR_POINTER;
-    *out_dist = buffer->ds3d.flMaxDistance;
+    *out_dist = buffer->get_ds3d_snapshot().flMaxDistance;
     return EAX_OK;
 }
 
@@ -554,7 +586,9 @@ EAX_API eax_result_t eax_buffer_set_3d_max_distance(eax_buffer_h buffer, float d
         buffer->ds3d_deferred.flMaxDistance = dist;
         buffer->ds3d_has_deferred = true;
     } else {
+        buffer->ds3d_seqlock.write_begin();
         buffer->ds3d.flMaxDistance = dist;
+        buffer->ds3d_seqlock.write_end();
         buffer->sync_to_openal();
     }
     return EAX_OK;
@@ -562,7 +596,7 @@ EAX_API eax_result_t eax_buffer_set_3d_max_distance(eax_buffer_h buffer, float d
 
 EAX_API eax_result_t eax_buffer_get_3d_mode(eax_buffer_h buffer, uint32_t* out_mode) {
     if (!buffer || !out_mode) return EAX_ERR_POINTER;
-    *out_mode = buffer->ds3d.dwMode;
+    *out_mode = buffer->get_ds3d_snapshot().dwMode;
     return EAX_OK;
 }
 
@@ -572,7 +606,9 @@ EAX_API eax_result_t eax_buffer_set_3d_mode(eax_buffer_h buffer, uint32_t mode, 
         buffer->ds3d_deferred.dwMode = mode;
         buffer->ds3d_has_deferred = true;
     } else {
+        buffer->ds3d_seqlock.write_begin();
         buffer->ds3d.dwMode = mode;
+        buffer->ds3d_seqlock.write_end();
         buffer->sync_to_openal();
     }
     return EAX_OK;

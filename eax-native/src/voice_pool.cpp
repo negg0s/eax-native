@@ -51,6 +51,7 @@ void eax_buffer_s::reset() noexcept {
     is_looping.store(false, std::memory_order_relaxed);
     playback_cursor.store(0.0, std::memory_order_relaxed);
 
+    ds3d_seqlock.write_begin();
     ds3d = {};
     ds3d.dwSize = sizeof(eax_ds3dbuffer_t);
     ds3d.flMinDistance = 1.0f;
@@ -58,6 +59,7 @@ void eax_buffer_s::reset() noexcept {
     ds3d.dwInsideConeAngle = 360;
     ds3d.dwOutsideConeAngle = 360;
     ds3d.dwMode = EAX_DS3DMODE_NORMAL;
+    ds3d_seqlock.write_end();
     ds3d_deferred = ds3d;
     ds3d_has_deferred = false;
 
@@ -105,21 +107,22 @@ void eax_buffer_s::sync_to_openal() noexcept {
 
     const bool is_3d = (caps.dwFlags & EAX_DSBCAPS_CTRL3D) != 0;
     if (is_3d) {
+        const auto snap = get_ds3d_snapshot();
         // DirectSound (+X right, +Y up, +Z forward) -> OpenAL (+X right, +Y up, -Z forward)
-        alSource3f(al_source, AL_POSITION, ds3d.vPosition.x, ds3d.vPosition.y, -ds3d.vPosition.z);
-        alSource3f(al_source, AL_VELOCITY, ds3d.vVelocity.x, ds3d.vVelocity.y, -ds3d.vVelocity.z);
-        alSource3f(al_source, AL_DIRECTION, ds3d.vConeOrientation.x, ds3d.vConeOrientation.y, -ds3d.vConeOrientation.z);
+        alSource3f(al_source, AL_POSITION, snap.vPosition.x, snap.vPosition.y, -snap.vPosition.z);
+        alSource3f(al_source, AL_VELOCITY, snap.vVelocity.x, snap.vVelocity.y, -snap.vVelocity.z);
+        alSource3f(al_source, AL_DIRECTION, snap.vConeOrientation.x, snap.vConeOrientation.y, -snap.vConeOrientation.z);
 
-        alSourcef(al_source, AL_REFERENCE_DISTANCE, ds3d.flMinDistance);
-        alSourcef(al_source, AL_MAX_DISTANCE, ds3d.flMaxDistance);
-        const float rolloff = context ? context->listener.flRolloffFactor : 1.0f;
+        alSourcef(al_source, AL_REFERENCE_DISTANCE, snap.flMinDistance);
+        alSourcef(al_source, AL_MAX_DISTANCE, snap.flMaxDistance);
+        const float rolloff = context ? context->get_listener_snapshot().flRolloffFactor : 1.0f;
         alSourcef(al_source, AL_ROLLOFF_FACTOR, rolloff);
 
-        alSourcef(al_source, AL_CONE_INNER_ANGLE, static_cast<float>(ds3d.dwInsideConeAngle));
-        alSourcef(al_source, AL_CONE_OUTER_ANGLE, static_cast<float>(ds3d.dwOutsideConeAngle));
-        alSourcef(al_source, AL_CONE_OUTER_GAIN, eax::mb_to_gain(ds3d.lConeOutsideVolume));
+        alSourcef(al_source, AL_CONE_INNER_ANGLE, static_cast<float>(snap.dwInsideConeAngle));
+        alSourcef(al_source, AL_CONE_OUTER_ANGLE, static_cast<float>(snap.dwOutsideConeAngle));
+        alSourcef(al_source, AL_CONE_OUTER_GAIN, eax::mb_to_gain(snap.lConeOutsideVolume));
 
-        alSourcei(al_source, AL_SOURCE_RELATIVE, (ds3d.dwMode != EAX_DS3DMODE_NORMAL) ? AL_TRUE : AL_FALSE);
+        alSourcei(al_source, AL_SOURCE_RELATIVE, (snap.dwMode != EAX_DS3DMODE_NORMAL) ? AL_TRUE : AL_FALSE);
     } else {
         alSourcef(al_source, AL_ROLLOFF_FACTOR, 0.0f);
         alSourcei(al_source, AL_SOURCE_RELATIVE, AL_TRUE);

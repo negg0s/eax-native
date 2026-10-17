@@ -9,6 +9,7 @@
 #include "spatializer.h"
 #include "eax_reverb.h"
 #include "openal_bridge.h"
+#include "seqlock.h"
 
 struct eax_context_s {
     eax::MemoryArena arena{eax::MemoryArena::DEFAULT_ARENA_SIZE};
@@ -21,10 +22,21 @@ struct eax_context_s {
     ALuint m_eax_effect{0};
     bool m_is_loopback{false};
 
-    // Listener State
+    // Listener State with lock-free SeqLock for RT tearing-free snapshot reads
+    eax::SeqLock listener_seqlock{};
     eax_ds3dlistener_t listener{};
     eax_ds3dlistener_t listener_deferred{};
     bool listener_has_deferred{false};
+
+    [[nodiscard]] eax_ds3dlistener_t get_listener_snapshot() const noexcept {
+        eax_ds3dlistener_t snap;
+        uint32_t s;
+        do {
+            s = listener_seqlock.read_begin();
+            snap = listener;
+        } while (listener_seqlock.read_retry(s));
+        return snap;
+    }
 
     // EAX Reverb State
     eax20_listener_properties_t eax_listener{};

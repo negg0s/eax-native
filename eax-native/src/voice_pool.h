@@ -7,6 +7,7 @@
 #include "eax_native_abi.h"
 #include "arena.h"
 #include "openal_bridge.h"
+#include "seqlock.h"
 
 struct eax_context_s;
 
@@ -37,10 +38,21 @@ struct eax_buffer_s {
     // Sample data buffer (backed by pre-allocated arena)
     eax::CircularSampleBuffer sample_buffer{};
 
-    // DirectSound3D parameters
+    // DirectSound3D parameters with lock-free SeqLock for RT tearing-free snapshot reads
+    eax::SeqLock ds3d_seqlock{};
     eax_ds3dbuffer_t ds3d{};
     eax_ds3dbuffer_t ds3d_deferred{};
     bool ds3d_has_deferred{false};
+
+    [[nodiscard]] eax_ds3dbuffer_t get_ds3d_snapshot() const noexcept {
+        eax_ds3dbuffer_t snap;
+        uint32_t s;
+        do {
+            s = ds3d_seqlock.read_begin();
+            snap = ds3d;
+        } while (ds3d_seqlock.read_retry(s));
+        return snap;
+    }
 
     // EAX 2.0 buffer properties
     eax20_buffer_properties_t eax20{};
