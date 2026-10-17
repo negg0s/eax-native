@@ -14,5 +14,8 @@ add_subdirectory(eax-native)
 # 2. Wine DirectSound PE shim & integration
 add_subdirectory(wine-integration)
 
-# 3. eaxctl management CLI tool
+# 3. PipeWire DSP filter & SPA node integration
+add_subdirectory(pipewire-integration)
+
+# 4. eaxctl management CLI tool
 add_subdirectory(tools/eaxctl)
