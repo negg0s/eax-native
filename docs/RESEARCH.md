@@ -112,7 +112,7 @@ In DSOAL, `Buffer::Prop::Set` (`dsoal/src/buffer.cpp:2230–2290`) and `PrimaryB
 EAXSetDirect(mContext, &guidPropSet, dwPropID, mSource, pPropData, cbPropData);
 EAXGetDirect(mContext, &guidPropSet, dwPropID, mSource, pPropData, cbPropData);
 ```
-(Defined in `dsoal/src/AL/alext.h:1075–1076`).
+(Defined in `dsoal/src/AL/alext.h:1115–1116`).
 
 ---
 
