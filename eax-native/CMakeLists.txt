@@ -55,9 +55,9 @@ target_include_directories(eax-native
 )
 
 if(TARGET OpenAL)
-    target_link_libraries(eax-native PRIVATE OpenAL)
+    target_link_libraries(eax-native PUBLIC OpenAL)
 elseif(OPENAL_LIBRARY)
-    target_link_libraries(eax-native PRIVATE ${OPENAL_LIBRARY})
+    target_link_libraries(eax-native PUBLIC ${OPENAL_LIBRARY})
 endif()
 
 target_compile_definitions(eax-native
