@@ -1,4 +1,4 @@
-# ARCH_Linux_ST
+# eax-native
 
 Стек для Linux, который возвращает в играх под Proton/Wine аппаратно-подобный DirectSound3D и EAX звук через OpenAL Soft и PipeWire.
 
@@ -64,3 +64,36 @@ LD_LIBRARY_PATH=build/eax-native ./build/tools/eaxctl/eaxctl install --appid <st
 - `pipewire-integration/`: фильтр задержки для PipeWire
 - `tools/`: `eaxctl` (установка и демо), бенчмарк задержки
 - `docs/`: архитектура, результаты фаз, роадмап
+- `prebuilt/`: готовые PE shim'ы (32/64 бит), см. `docs/prebuilt.md`
+
+## Статус и ограничения
+
+- EAX 1.0 и 2.0 property sets обработаны; EAX 3.0/4.0 не рекламируются и не включены
+- Таблица EAX2 reverb пресетов: пока только GENERIC и CAVE, остальные env ставят номер без тела пресета
+- Проверено: сборка, ctest, headless demo, автосборка PE shim'ов из MinGW (см. `docs/review-notes.md`)
+- Не проверено на реальных играх: процесс использования в конкретных играх автора
+  не документирован: реальные замеры - фаза 4
+- Windows-only хост не поддерживается: это Linux-стек
+
+## Как проверить, что shim работает
+
+После `eaxctl install` и запуска игры:
+
+```
+LD_LIBRARY_PATH=build/eax-native ./build/tools/eaxctl/eaxctl status
+```
+
+`status` должен показать обе архитектуры как `Installed` и DLL override.
+Если игра не видит shim - напрямую найти dsound.dll в `system32`/`syswow64`
+префикса можно и вручную.
+
+## Известные проблемы
+
+См. `docs/review-notes.md`: там же история исправлений (R-001..R-031).
+
+## Благодарности
+
+- OpenAL Soft (LGPL-2.1): основной рендер и EFX
+- Wine: базовая идея DLL override и COM интеграция
+- PipeWire: низкий латентный аудиограф
+

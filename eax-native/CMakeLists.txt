@@ -7,11 +7,37 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Warning options applied per-target to prevent poisoning third_party subprojects
+option(EAX_WERROR "Treat compiler warnings as errors" OFF)
 set(EAX_COMPILE_OPTIONS "")
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    set(EAX_COMPILE_OPTIONS -Wall -Wextra -Werror -pedantic)
+    set(EAX_COMPILE_OPTIONS -Wall -Wextra -Wpedantic)
+    if(EAX_WERROR)
+        list(APPEND EAX_COMPILE_OPTIONS -Werror)
+    endif()
 elseif(MSVC)
-    set(EAX_COMPILE_OPTIONS /W4 /WX /permissive-)
+    set(EAX_COMPILE_OPTIONS /W4)
+    if(EAX_WERROR)
+        list(APPEND EAX_COMPILE_OPTIONS /WX)
+    endif()
+endif()
+
+# Default build type
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release RelWithDebInfo MinSizeRel)
+endif()
+
+# Sanitizer options
+option(EAX_ENABLE_ASAN "Build with AddressSanitizer" OFF)
+option(EAX_ENABLE_UBSAN "Build with UndefinedBehaviorSanitizer" OFF)
+set(EAX_SANITIZER_OPTIONS "")
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    if(EAX_ENABLE_ASAN)
+        list(APPEND EAX_SANITIZER_OPTIONS -fsanitize=address -fno-omit-frame-pointer)
+    endif()
+    if(EAX_ENABLE_UBSAN)
+        list(APPEND EAX_SANITIZER_OPTIONS -fsanitize=undefined -fno-omit-frame-pointer)
+    endif()
 endif()
 
 # Build options
@@ -69,6 +95,23 @@ if(EAX_COMPILE_OPTIONS)
     target_compile_options(eax-native PRIVATE ${EAX_COMPILE_OPTIONS})
 endif()
 
+if(EAX_SANITIZER_OPTIONS)
+    target_compile_options(eax-native PRIVATE ${EAX_SANITIZER_OPTIONS})
+    target_link_options(eax-native PRIVATE ${EAX_SANITIZER_OPTIONS})
+endif()
+
+install(TARGETS eax-native
+    EXPORT eax-native-targets
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+)
+install(DIRECTORY include/ DESTINATION include)
+install(EXPORT eax-native-targets
+    FILE eax-native-targets.cmake
+    NAMESPACE eax::
+    DESTINATION lib/cmake/eax-native
+)
 # Demo executable
 if(EAX_BUILD_DEMO)
     add_executable(eax_demo
@@ -82,6 +125,10 @@ if(EAX_BUILD_DEMO)
     )
     if(EAX_COMPILE_OPTIONS)
         target_compile_options(eax_demo PRIVATE ${EAX_COMPILE_OPTIONS})
+    endif()
+    if(EAX_SANITIZER_OPTIONS)
+        target_compile_options(eax_demo PRIVATE ${EAX_SANITIZER_OPTIONS})
+        target_link_options(eax_demo PRIVATE ${EAX_SANITIZER_OPTIONS})
     endif()
 endif()
 
@@ -112,6 +159,11 @@ if(EAX_BUILD_TESTS)
 
     if(EAX_COMPILE_OPTIONS)
         target_compile_options(eax_tests PRIVATE ${EAX_COMPILE_OPTIONS})
+    endif()
+
+    if(EAX_SANITIZER_OPTIONS)
+        target_compile_options(eax_tests PRIVATE ${EAX_SANITIZER_OPTIONS})
+        target_link_options(eax_tests PRIVATE ${EAX_SANITIZER_OPTIONS})
     endif()
 
     # Disable pedantic errors on external test framework code if necessary
