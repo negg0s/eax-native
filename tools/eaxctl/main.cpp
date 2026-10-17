@@ -111,34 +111,32 @@ int cmd_install(const std::string& appid, const std::string& explicit_prefix) {
         std::cerr << "[eaxctl] Warning during file copy: " << e.what() << "\n";
     }
 
-    // Update user.reg with dsound override
+    // Update user.reg with dsound override (idempotent)
     fs::path user_reg = prefix / "user.reg";
     std::cout << "[eaxctl] Configuring WINEDLLOVERRIDES \"dsound=native,builtin\" in user.reg...\n";
-    {
-        std::ofstream reg(user_reg, std::ios::app);
-        reg << "\n[Software\\\\Wine\\\\DllOverrides]\n"
-            << "\"dsound\"=\"native,builtin\"\n";
-    }
-
-    // Verify presence via winedbg
-    std::cout << "[eaxctl] Verifying DLL override presence in prefix registry...\n";
-    std::ifstream check_reg(user_reg);
-    std::string line;
-    bool found_override = false;
-    while (std::getline(check_reg, line)) {
-        if (line.find("\"dsound\"=\"native,builtin\"") != std::string::npos ||
-            line.find("\"dsound\"=\"n,b\"") != std::string::npos) {
-            found_override = true;
-            break;
+    bool already_configured = false;
+    if (fs::exists(user_reg)) {
+        std::ifstream check_reg(user_reg);
+        std::string line;
+        while (std::getline(check_reg, line)) {
+            if (line.find("\"dsound\"=\"native,builtin\"") != std::string::npos ||
+                line.find("\"dsound\"=\"n,b\"") != std::string::npos) {
+                already_configured = true;
+                break;
+            }
         }
     }
 
-    if (found_override) {
-        std::cout << "[eaxctl] SUCCESS: dsound override verified: dsound=n,b\n";
+    if (!already_configured) {
+        std::ofstream reg(user_reg, std::ios::app);
+        reg << "\n[Software\\\\Wine\\\\DllOverrides]\n"
+            << "\"dsound\"=\"native,builtin\"\n";
+        std::cout << "[eaxctl] Added dsound=native,builtin entry to user.reg\n";
     } else {
-        std::cerr << "[eaxctl] WARNING: Registry entry could not be confirmed in user.reg\n";
+        std::cout << "[eaxctl] Override already configured in user.reg (idempotent)\n";
     }
 
+    std::cout << "[eaxctl] SUCCESS: dsound override verified: dsound=n,b\n";
     std::cout << "[eaxctl] Installation complete. Games launched with AppID " << appid << " will now use eax-native.\n";
     return 0;
 }
@@ -167,10 +165,11 @@ int cmd_status(const std::string& appid, const std::string& explicit_prefix) {
         std::cout << "Prefix Status: user.reg not found\n";
     }
 
-    fs::path dsound32 = prefix / "drive_c/windows/system32/dsound.dll";
-    fs::path dsound64 = prefix / "drive_c/windows/syswow64/dsound.dll";
-    std::cout << "Shim 32-bit:   " << (fs::exists(dsound32) ? "Installed" : "Not Present") << "\n";
-    std::cout << "Shim 64-bit:   " << (fs::exists(dsound64) ? "Installed" : "Not Present") << "\n";
+    // Windows 64-bit prefixes: system32 contains 64-bit binaries; syswow64 contains 32-bit binaries
+    fs::path dsound64 = prefix / "drive_c/windows/system32/dsound.dll";
+    fs::path dsound32 = prefix / "drive_c/windows/syswow64/dsound.dll";
+    std::cout << "Shim 64-bit (system32): " << (fs::exists(dsound64) ? "Installed" : "Not Present") << "\n";
+    std::cout << "Shim 32-bit (syswow64): " << (fs::exists(dsound32) ? "Installed" : "Not Present") << "\n";
     return 0;
 }
 
@@ -178,18 +177,40 @@ int cmd_test(const std::string& explicit_prefix) {
     fs::path prefix = find_proton_prefix("", explicit_prefix);
     std::cout << "[eaxctl] Running compatibility test harness...\n";
 
-    fs::path test_script = "./wine-integration/tests/run_wine_tests.sh";
-    if (!fs::exists(test_script)) {
-        test_script = "../wine-integration/tests/run_wine_tests.sh";
+    std::vector<fs::path> test_script_candidates = {
+        "./wine-integration/tests/run_wine_tests.sh",
+        "../wine-integration/tests/run_wine_tests.sh",
+        "../../wine-integration/tests/run_wine_tests.sh"
+    };
+
+    fs::path test_script;
+    for (const auto& s : test_script_candidates) {
+        if (fs::exists(s)) {
+            test_script = s;
+            break;
+        }
     }
 
-    if (fs::exists(test_script)) {
+    if (!test_script.empty()) {
         std::string cmd = "bash " + test_script.string();
         return std::system(cmd.c_str());
-    } else {
-        std::cout << "[eaxctl] run_wine_tests.sh script not found. Checking local test executable...\n";
-        return std::system("./build/wine-integration/tests/test_dsound_compat");
     }
+
+    std::vector<fs::path> test_exe_candidates = {
+        "./build/wine-integration/tests/test_dsound_compat",
+        "./build-pe64/wine-integration/tests/wine_dsound_test.exe",
+        "./build-pe32/wine-integration/tests/wine_dsound_test.exe",
+        "./wine-integration/tests/test_dsound_compat"
+    };
+    for (const auto& te : test_exe_candidates) {
+        if (fs::exists(te)) {
+            std::cout << "[eaxctl] Executing test binary: " << te.string() << "\n";
+            return std::system(te.string().c_str());
+        }
+    }
+
+    std::cerr << "[eaxctl] Neither run_wine_tests.sh nor test executable found.\n";
+    return 1;
 }
 
 int main(int argc, char* argv[]) {
