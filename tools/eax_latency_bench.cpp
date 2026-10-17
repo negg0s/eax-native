@@ -198,16 +198,21 @@ int main(int argc, char* argv[]) {
                   << "\n";
     };
 
-    print_row("Wine Builtin dsound (MMDevAPI)", wine_stats);
-    print_row("Native EAX + OpenAL Soft", al_stats);
-    print_row("Native EAX + PipeWire DSP", pw_stats);
+    print_row("Wine Builtin (Simulation)", wine_stats);
+    print_row("Native EAX + OpenAL (Model)", al_stats);
+    print_row("Native EAX + PipeWire (Model)", pw_stats);
 
     std::cout << "========================================================================================\n\n";
 
+    std::cout << "[*] Methodology Note (WSL / Daemon-less Fallback):\n";
+    std::cout << "    - PipeWire/OpenAL latency is model-derived (quantum buffering + measured DSP compute).\n";
+    std::cout << "    - Wine row represents an analytical simulation model of MMDevAPI triple buffering.\n";
+    std::cout << "    - In environments without a live PW daemon, standalone RT loop drives DSP profiling.\n\n";
+
     std::cout << "[*] Phase 3 Exit Criterion Check:\n";
     std::cout << "    - Target Round-trip Latency : < 40.00 ms\n";
-    std::cout << "    - PipeWire DSP Avg Latency  : " << pw_stats.avg_ms << " ms\n";
-    std::cout << "    - PipeWire DSP Max Latency  : " << pw_stats.max_ms << " ms\n";
+    std::cout << "    - PipeWire DSP Avg Latency  : " << pw_stats.avg_ms << " ms (modeled)\n";
+    std::cout << "    - PipeWire DSP Max Latency  : " << pw_stats.max_ms << " ms (modeled)\n";
 
     if (pw_stats.avg_ms < 40.0 && pw_stats.max_ms < 40.0) {
         std::cout << "[+] SUCCESS: Native EAX PipeWire round-trip latency meets exit criteria (< 40 ms).\n";
