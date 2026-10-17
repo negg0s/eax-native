@@ -87,25 +87,25 @@ struct DirectSoundImpl {
 /* DirectSoundImpl COM Methods                                                */
 /* -------------------------------------------------------------------------- */
 
-static HRESULT DS_QueryInterface(IDirectSound8* This, REFIID riid, void** ppvObject) {
+static HRESULT DS_STDAPICALLTYPE DS_QueryInterface(IDirectSound8* This, REFIID riid, void** ppvObject) {
     if (!This || !ppvObject) return E_POINTER;
     auto* self = reinterpret_cast<DirectSoundImpl*>(This);
     return self->QueryInterface(riid, ppvObject);
 }
 
-static ULONG DS_AddRef(IDirectSound8* This) {
+static ULONG DS_STDAPICALLTYPE DS_AddRef(IDirectSound8* This) {
     if (!This) return 0;
     auto* self = reinterpret_cast<DirectSoundImpl*>(This);
     return self->AddRef();
 }
 
-static ULONG DS_Release(IDirectSound8* This) {
+static ULONG DS_STDAPICALLTYPE DS_Release(IDirectSound8* This) {
     if (!This) return 0;
     auto* self = reinterpret_cast<DirectSoundImpl*>(This);
     return self->Release();
 }
 
-static HRESULT DS_CreateSoundBuffer(IDirectSound8* This, LPCDSBUFFERDESC pcDSBufferDesc, IDirectSoundBuffer** ppDSBuffer, IUnknown* pUnkOuter) {
+static HRESULT DS_STDAPICALLTYPE DS_CreateSoundBuffer(IDirectSound8* This, LPCDSBUFFERDESC pcDSBufferDesc, IDirectSoundBuffer** ppDSBuffer, IUnknown* pUnkOuter) {
     if (!This || !pcDSBufferDesc || !ppDSBuffer) return DSERR_INVALIDPARAM;
     if (pUnkOuter) return DSERR_NOAGGREGATION;
 
@@ -144,13 +144,13 @@ static HRESULT DS_CreateSoundBuffer(IDirectSound8* This, LPCDSBUFFERDESC pcDSBuf
     return S_OK;
 }
 
-static HRESULT DS_GetCaps(IDirectSound8* This, DSCAPS* pDSCaps) {
+static HRESULT DS_STDAPICALLTYPE DS_GetCaps(IDirectSound8* This, DSCAPS* pDSCaps) {
     if (!This || !pDSCaps) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundImpl*>(This);
     return (eax_context_get_caps(self->nativeContext, pDSCaps) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT DS_DuplicateSoundBuffer(IDirectSound8* This, IDirectSoundBuffer* pDSBufferOriginal, IDirectSoundBuffer** ppDSBufferDuplicate) {
+static HRESULT DS_STDAPICALLTYPE DS_DuplicateSoundBuffer(IDirectSound8* This, IDirectSoundBuffer* pDSBufferOriginal, IDirectSoundBuffer** ppDSBufferDuplicate) {
     if (!This || !pDSBufferOriginal || !ppDSBufferDuplicate) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundImpl*>(This);
     auto* srcImpl = reinterpret_cast<DirectSoundBufferImpl*>(pDSBufferOriginal);
@@ -169,31 +169,31 @@ static HRESULT DS_DuplicateSoundBuffer(IDirectSound8* This, IDirectSoundBuffer* 
     return S_OK;
 }
 
-static HRESULT DS_SetCooperativeLevel(IDirectSound8* /*This*/, HWND /*hwnd*/, DWORD /*dwLevel*/) {
+static HRESULT DS_STDAPICALLTYPE DS_SetCooperativeLevel(IDirectSound8* /*This*/, HWND /*hwnd*/, DWORD /*dwLevel*/) {
     return S_OK;
 }
 
-static HRESULT DS_Compact(IDirectSound8* /*This*/) {
+static HRESULT DS_STDAPICALLTYPE DS_Compact(IDirectSound8* /*This*/) {
     return S_OK;
 }
 
-static HRESULT DS_GetSpeakerConfig(IDirectSound8* This, DWORD* pdwSpeakerConfig) {
+static HRESULT DS_STDAPICALLTYPE DS_GetSpeakerConfig(IDirectSound8* This, DWORD* pdwSpeakerConfig) {
     if (!This || !pdwSpeakerConfig) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundImpl*>(This);
     return (eax_context_get_speaker_config(self->nativeContext, pdwSpeakerConfig) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT DS_SetSpeakerConfig(IDirectSound8* This, DWORD dwSpeakerConfig) {
+static HRESULT DS_STDAPICALLTYPE DS_SetSpeakerConfig(IDirectSound8* This, DWORD dwSpeakerConfig) {
     if (!This) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundImpl*>(This);
     return (eax_context_set_speaker_config(self->nativeContext, dwSpeakerConfig) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT DS_Initialize(IDirectSound8* /*This*/, const GUID* /*pcGuidDevice*/) {
+static HRESULT DS_STDAPICALLTYPE DS_Initialize(IDirectSound8* /*This*/, const GUID* /*pcGuidDevice*/) {
     return S_OK;
 }
 
-static HRESULT DS_VerifyCertification(IDirectSound8* /*This*/, DWORD* pdwCertified) {
+static HRESULT DS_STDAPICALLTYPE DS_VerifyCertification(IDirectSound8* /*This*/, DWORD* pdwCertified) {
     if (pdwCertified) *pdwCertified = 0x00000001; /* DS_CERTIFIED */
     return S_OK;
 }
@@ -206,83 +206,83 @@ static DirectSoundImpl* Listener_Impl(IDirectSound3DListener* This) {
     return reinterpret_cast<DirectSoundImpl*>(reinterpret_cast<char*>(This) - offsetof(DirectSoundImpl, lpVtblListener));
 }
 
-static HRESULT Listener_QueryInterface(IDirectSound3DListener* This, REFIID riid, void** ppvObject) {
+static HRESULT DS_STDAPICALLTYPE Listener_QueryInterface(IDirectSound3DListener* This, REFIID riid, void** ppvObject) {
     return Listener_Impl(This)->QueryInterface(riid, ppvObject);
 }
 
-static ULONG Listener_AddRef(IDirectSound3DListener* This) {
+static ULONG DS_STDAPICALLTYPE Listener_AddRef(IDirectSound3DListener* This) {
     return Listener_Impl(This)->AddRef();
 }
 
-static ULONG Listener_Release(IDirectSound3DListener* This) {
+static ULONG DS_STDAPICALLTYPE Listener_Release(IDirectSound3DListener* This) {
     return Listener_Impl(This)->Release();
 }
 
-static HRESULT Listener_GetAllParameters(IDirectSound3DListener* This, DS3DLISTENER* pListener) {
+static HRESULT DS_STDAPICALLTYPE Listener_GetAllParameters(IDirectSound3DListener* This, DS3DLISTENER* pListener) {
     if (!This || !pListener) return DSERR_INVALIDPARAM;
     return (eax_listener_get_all_parameters(Listener_Impl(This)->nativeContext, pListener) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Listener_GetDistanceFactor(IDirectSound3DListener* This, D3DVALUE* pflDistanceFactor) {
+static HRESULT DS_STDAPICALLTYPE Listener_GetDistanceFactor(IDirectSound3DListener* This, D3DVALUE* pflDistanceFactor) {
     if (!This || !pflDistanceFactor) return DSERR_INVALIDPARAM;
     return (eax_listener_get_distance_factor(Listener_Impl(This)->nativeContext, pflDistanceFactor) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Listener_GetDopplerFactor(IDirectSound3DListener* This, D3DVALUE* pflDopplerFactor) {
+static HRESULT DS_STDAPICALLTYPE Listener_GetDopplerFactor(IDirectSound3DListener* This, D3DVALUE* pflDopplerFactor) {
     if (!This || !pflDopplerFactor) return DSERR_INVALIDPARAM;
     return (eax_listener_get_doppler_factor(Listener_Impl(This)->nativeContext, pflDopplerFactor) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Listener_GetOrientation(IDirectSound3DListener* This, D3DVECTOR* pvOrientFront, D3DVECTOR* pvOrientTop) {
+static HRESULT DS_STDAPICALLTYPE Listener_GetOrientation(IDirectSound3DListener* This, D3DVECTOR* pvOrientFront, D3DVECTOR* pvOrientTop) {
     if (!This || !pvOrientFront || !pvOrientTop) return DSERR_INVALIDPARAM;
     return (eax_listener_get_orientation(Listener_Impl(This)->nativeContext, pvOrientFront, pvOrientTop) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Listener_GetPosition(IDirectSound3DListener* This, D3DVECTOR* pvPosition) {
+static HRESULT DS_STDAPICALLTYPE Listener_GetPosition(IDirectSound3DListener* This, D3DVECTOR* pvPosition) {
     if (!This || !pvPosition) return DSERR_INVALIDPARAM;
     return (eax_listener_get_position(Listener_Impl(This)->nativeContext, pvPosition) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Listener_GetRolloffFactor(IDirectSound3DListener* This, D3DVALUE* pflRolloffFactor) {
+static HRESULT DS_STDAPICALLTYPE Listener_GetRolloffFactor(IDirectSound3DListener* This, D3DVALUE* pflRolloffFactor) {
     if (!This || !pflRolloffFactor) return DSERR_INVALIDPARAM;
     return (eax_listener_get_rolloff_factor(Listener_Impl(This)->nativeContext, pflRolloffFactor) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Listener_GetVelocity(IDirectSound3DListener* This, D3DVECTOR* pvVelocity) {
+static HRESULT DS_STDAPICALLTYPE Listener_GetVelocity(IDirectSound3DListener* This, D3DVECTOR* pvVelocity) {
     if (!This || !pvVelocity) return DSERR_INVALIDPARAM;
     return (eax_listener_get_velocity(Listener_Impl(This)->nativeContext, pvVelocity) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Listener_SetAllParameters(IDirectSound3DListener* This, LPCDS3DLISTENER pcListener, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Listener_SetAllParameters(IDirectSound3DListener* This, LPCDS3DLISTENER pcListener, DWORD dwApply) {
     if (!This || !pcListener) return DSERR_INVALIDPARAM;
     return (eax_listener_set_all_parameters(Listener_Impl(This)->nativeContext, pcListener, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Listener_SetDistanceFactor(IDirectSound3DListener* This, D3DVALUE flDistanceFactor, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Listener_SetDistanceFactor(IDirectSound3DListener* This, D3DVALUE flDistanceFactor, DWORD dwApply) {
     return (eax_listener_set_distance_factor(Listener_Impl(This)->nativeContext, flDistanceFactor, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Listener_SetDopplerFactor(IDirectSound3DListener* This, D3DVALUE flDopplerFactor, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Listener_SetDopplerFactor(IDirectSound3DListener* This, D3DVALUE flDopplerFactor, DWORD dwApply) {
     return (eax_listener_set_doppler_factor(Listener_Impl(This)->nativeContext, flDopplerFactor, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Listener_SetOrientation(IDirectSound3DListener* This, D3DVALUE xFront, D3DVALUE yFront, D3DVALUE zFront, D3DVALUE xTop, D3DVALUE yTop, D3DVALUE zTop, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Listener_SetOrientation(IDirectSound3DListener* This, D3DVALUE xFront, D3DVALUE yFront, D3DVALUE zFront, D3DVALUE xTop, D3DVALUE yTop, D3DVALUE zTop, DWORD dwApply) {
     return (eax_listener_set_orientation(Listener_Impl(This)->nativeContext, xFront, yFront, zFront, xTop, yTop, zTop, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Listener_SetPosition(IDirectSound3DListener* This, D3DVALUE x, D3DVALUE y, D3DVALUE z, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Listener_SetPosition(IDirectSound3DListener* This, D3DVALUE x, D3DVALUE y, D3DVALUE z, DWORD dwApply) {
     return (eax_listener_set_position(Listener_Impl(This)->nativeContext, x, y, z, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Listener_SetRolloffFactor(IDirectSound3DListener* This, D3DVALUE flRolloffFactor, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Listener_SetRolloffFactor(IDirectSound3DListener* This, D3DVALUE flRolloffFactor, DWORD dwApply) {
     return (eax_listener_set_rolloff_factor(Listener_Impl(This)->nativeContext, flRolloffFactor, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Listener_SetVelocity(IDirectSound3DListener* This, D3DVALUE x, D3DVALUE y, D3DVALUE z, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Listener_SetVelocity(IDirectSound3DListener* This, D3DVALUE x, D3DVALUE y, D3DVALUE z, DWORD dwApply) {
     return (eax_listener_set_velocity(Listener_Impl(This)->nativeContext, x, y, z, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Listener_CommitDeferredSettings(IDirectSound3DListener* This) {
+static HRESULT DS_STDAPICALLTYPE Listener_CommitDeferredSettings(IDirectSound3DListener* This) {
     return (eax_listener_commit_deferred(Listener_Impl(This)->nativeContext) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
@@ -294,19 +294,19 @@ static DirectSoundImpl* DSProp_Impl(IKsPropertySet* This) {
     return reinterpret_cast<DirectSoundImpl*>(reinterpret_cast<char*>(This) - offsetof(DirectSoundImpl, lpVtblPropSet));
 }
 
-static HRESULT DSProp_QueryInterface(IKsPropertySet* This, REFIID riid, void** ppvObject) {
+static HRESULT DS_STDAPICALLTYPE DSProp_QueryInterface(IKsPropertySet* This, REFIID riid, void** ppvObject) {
     return DSProp_Impl(This)->QueryInterface(riid, ppvObject);
 }
 
-static ULONG DSProp_AddRef(IKsPropertySet* This) {
+static ULONG DS_STDAPICALLTYPE DSProp_AddRef(IKsPropertySet* This) {
     return DSProp_Impl(This)->AddRef();
 }
 
-static ULONG DSProp_Release(IKsPropertySet* This) {
+static ULONG DS_STDAPICALLTYPE DSProp_Release(IKsPropertySet* This) {
     return DSProp_Impl(This)->Release();
 }
 
-static HRESULT DSProp_Get(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulId, void* pInstanceData, ULONG ulInstanceLength, void* pPropertyData, ULONG ulDataLength, ULONG* pulBytesReturned) {
+static HRESULT DS_STDAPICALLTYPE DSProp_Get(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulId, void* pInstanceData, ULONG ulInstanceLength, void* pPropertyData, ULONG ulDataLength, ULONG* pulBytesReturned) {
     if (!This || !rguidPropSet || !pPropertyData) return E_POINTER;
     eax_result_t res = eax_prop_get(DSProp_Impl(This)->nativeContext, nullptr, rguidPropSet, ulId, pInstanceData, ulInstanceLength, pPropertyData, ulDataLength, pulBytesReturned);
     if (res == EAX_OK) return S_OK;
@@ -314,7 +314,7 @@ static HRESULT DSProp_Get(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulId
     return E_FAIL;
 }
 
-static HRESULT DSProp_Set(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulId, void* pInstanceData, ULONG ulInstanceLength, void* pPropertyData, ULONG ulDataLength) {
+static HRESULT DS_STDAPICALLTYPE DSProp_Set(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulId, void* pInstanceData, ULONG ulInstanceLength, void* pPropertyData, ULONG ulDataLength) {
     if (!This || !rguidPropSet || !pPropertyData) return E_POINTER;
     eax_result_t res = eax_prop_set(DSProp_Impl(This)->nativeContext, nullptr, rguidPropSet, ulId, pInstanceData, ulInstanceLength, pPropertyData, ulDataLength);
     if (res == EAX_OK) return S_OK;
@@ -322,7 +322,7 @@ static HRESULT DSProp_Set(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulId
     return E_FAIL;
 }
 
-static HRESULT DSProp_QuerySupport(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulId, ULONG* pulTypeSupport) {
+static HRESULT DS_STDAPICALLTYPE DSProp_QuerySupport(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulId, ULONG* pulTypeSupport) {
     if (!This || !rguidPropSet || !pulTypeSupport) return E_POINTER;
     eax_result_t res = eax_prop_query_support(DSProp_Impl(This)->nativeContext, nullptr, rguidPropSet, ulId, pulTypeSupport);
     if (res == EAX_OK) return S_OK;
@@ -333,37 +333,37 @@ static HRESULT DSProp_QuerySupport(IKsPropertySet* This, REFGUID rguidPropSet, U
 /* DirectSoundBuffer COM Methods                                              */
 /* -------------------------------------------------------------------------- */
 
-static HRESULT Buf_QueryInterface(IDirectSoundBuffer8* This, REFIID riid, void** ppvObject) {
+static HRESULT DS_STDAPICALLTYPE Buf_QueryInterface(IDirectSoundBuffer8* This, REFIID riid, void** ppvObject) {
     if (!This || !ppvObject) return E_POINTER;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return self->QueryInterface(riid, ppvObject);
 }
 
-static ULONG Buf_AddRef(IDirectSoundBuffer8* This) {
+static ULONG DS_STDAPICALLTYPE Buf_AddRef(IDirectSoundBuffer8* This) {
     if (!This) return 0;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return self->AddRef();
 }
 
-static ULONG Buf_Release(IDirectSoundBuffer8* This) {
+static ULONG DS_STDAPICALLTYPE Buf_Release(IDirectSoundBuffer8* This) {
     if (!This) return 0;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return self->Release();
 }
 
-static HRESULT Buf_GetCaps(IDirectSoundBuffer8* This, DSBCAPS* pDSBCaps) {
+static HRESULT DS_STDAPICALLTYPE Buf_GetCaps(IDirectSoundBuffer8* This, DSBCAPS* pDSBCaps) {
     if (!This || !pDSBCaps) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return (eax_buffer_get_caps(self->nativeBuffer, pDSBCaps) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf_GetCurrentPosition(IDirectSoundBuffer8* This, DWORD* pdwCurrentPlayCursor, DWORD* pdwCurrentWriteCursor) {
+static HRESULT DS_STDAPICALLTYPE Buf_GetCurrentPosition(IDirectSoundBuffer8* This, DWORD* pdwCurrentPlayCursor, DWORD* pdwCurrentWriteCursor) {
     if (!This) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return (eax_buffer_get_current_position(self->nativeBuffer, pdwCurrentPlayCursor, pdwCurrentWriteCursor) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf_GetFormat(IDirectSoundBuffer8* This, WAVEFORMATEX* pwfxFormat, DWORD dwSizeAllocated, DWORD* pdwSizeWritten) {
+static HRESULT DS_STDAPICALLTYPE Buf_GetFormat(IDirectSoundBuffer8* This, WAVEFORMATEX* pwfxFormat, DWORD dwSizeAllocated, DWORD* pdwSizeWritten) {
     if (!This) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     if (pwfxFormat && dwSizeAllocated >= sizeof(WAVEFORMATEX)) {
@@ -373,99 +373,99 @@ static HRESULT Buf_GetFormat(IDirectSoundBuffer8* This, WAVEFORMATEX* pwfxFormat
     return S_OK;
 }
 
-static HRESULT Buf_GetVolume(IDirectSoundBuffer8* This, LONG* plVolume) {
+static HRESULT DS_STDAPICALLTYPE Buf_GetVolume(IDirectSoundBuffer8* This, LONG* plVolume) {
     if (!This || !plVolume) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return (eax_buffer_get_volume(self->nativeBuffer, plVolume) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf_GetPan(IDirectSoundBuffer8* This, LONG* plPan) {
+static HRESULT DS_STDAPICALLTYPE Buf_GetPan(IDirectSoundBuffer8* This, LONG* plPan) {
     if (!This || !plPan) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return (eax_buffer_get_pan(self->nativeBuffer, plPan) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf_GetFrequency(IDirectSoundBuffer8* This, DWORD* pdwFrequency) {
+static HRESULT DS_STDAPICALLTYPE Buf_GetFrequency(IDirectSoundBuffer8* This, DWORD* pdwFrequency) {
     if (!This || !pdwFrequency) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return (eax_buffer_get_frequency(self->nativeBuffer, pdwFrequency) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf_GetStatus(IDirectSoundBuffer8* This, DWORD* pdwStatus) {
+static HRESULT DS_STDAPICALLTYPE Buf_GetStatus(IDirectSoundBuffer8* This, DWORD* pdwStatus) {
     if (!This || !pdwStatus) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return (eax_buffer_get_status(self->nativeBuffer, pdwStatus) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf_Initialize(IDirectSoundBuffer8* /*This*/, IDirectSound* /*pDirectSound*/, LPCDSBUFFERDESC /*pcDSBufferDesc*/) {
+static HRESULT DS_STDAPICALLTYPE Buf_Initialize(IDirectSoundBuffer8* /*This*/, IDirectSound* /*pDirectSound*/, LPCDSBUFFERDESC /*pcDSBufferDesc*/) {
     return S_OK;
 }
 
-static HRESULT Buf_Lock(IDirectSoundBuffer8* This, DWORD dwOffset, DWORD dwBytes, void** ppvAudioPtr1, DWORD* pdwAudioBytes1, void** ppvAudioPtr2, DWORD* pdwAudioBytes2, DWORD dwFlags) {
+static HRESULT DS_STDAPICALLTYPE Buf_Lock(IDirectSoundBuffer8* This, DWORD dwOffset, DWORD dwBytes, void** ppvAudioPtr1, DWORD* pdwAudioBytes1, void** ppvAudioPtr2, DWORD* pdwAudioBytes2, DWORD dwFlags) {
     if (!This || !ppvAudioPtr1 || !pdwAudioBytes1) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return (eax_buffer_lock(self->nativeBuffer, dwOffset, dwBytes, ppvAudioPtr1, pdwAudioBytes1, ppvAudioPtr2, pdwAudioBytes2, dwFlags) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf_Play(IDirectSoundBuffer8* This, DWORD /*dwReserved1*/, DWORD dwPriority, DWORD dwFlags) {
+static HRESULT DS_STDAPICALLTYPE Buf_Play(IDirectSoundBuffer8* This, DWORD /*dwReserved1*/, DWORD dwPriority, DWORD dwFlags) {
     if (!This) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return (eax_buffer_play(self->nativeBuffer, dwPriority, dwFlags) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf_SetCurrentPosition(IDirectSoundBuffer8* This, DWORD dwNewPosition) {
+static HRESULT DS_STDAPICALLTYPE Buf_SetCurrentPosition(IDirectSoundBuffer8* This, DWORD dwNewPosition) {
     if (!This) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return (eax_buffer_set_current_position(self->nativeBuffer, dwNewPosition) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf_SetFormat(IDirectSoundBuffer8* /*This*/, const WAVEFORMATEX* /*pcfxFormat*/) {
+static HRESULT DS_STDAPICALLTYPE Buf_SetFormat(IDirectSoundBuffer8* /*This*/, const WAVEFORMATEX* /*pcfxFormat*/) {
     return S_OK;
 }
 
-static HRESULT Buf_SetVolume(IDirectSoundBuffer8* This, LONG lVolume) {
+static HRESULT DS_STDAPICALLTYPE Buf_SetVolume(IDirectSoundBuffer8* This, LONG lVolume) {
     if (!This) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return (eax_buffer_set_volume(self->nativeBuffer, lVolume) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf_SetPan(IDirectSoundBuffer8* This, LONG lPan) {
+static HRESULT DS_STDAPICALLTYPE Buf_SetPan(IDirectSoundBuffer8* This, LONG lPan) {
     if (!This) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return (eax_buffer_set_pan(self->nativeBuffer, lPan) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf_SetFrequency(IDirectSoundBuffer8* This, DWORD dwFrequency) {
+static HRESULT DS_STDAPICALLTYPE Buf_SetFrequency(IDirectSoundBuffer8* This, DWORD dwFrequency) {
     if (!This) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return (eax_buffer_set_frequency(self->nativeBuffer, dwFrequency) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf_Stop(IDirectSoundBuffer8* This) {
+static HRESULT DS_STDAPICALLTYPE Buf_Stop(IDirectSoundBuffer8* This) {
     if (!This) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return (eax_buffer_stop(self->nativeBuffer) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf_Unlock(IDirectSoundBuffer8* This, void* pvAudioPtr1, DWORD dwAudioBytes1, void* pvAudioPtr2, DWORD dwAudioBytes2) {
+static HRESULT DS_STDAPICALLTYPE Buf_Unlock(IDirectSoundBuffer8* This, void* pvAudioPtr1, DWORD dwAudioBytes1, void* pvAudioPtr2, DWORD dwAudioBytes2) {
     if (!This) return DSERR_INVALIDPARAM;
     auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
     return (eax_buffer_unlock(self->nativeBuffer, pvAudioPtr1, dwAudioBytes1, pvAudioPtr2, dwAudioBytes2) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf_Restore(IDirectSoundBuffer8* /*This*/) {
+static HRESULT DS_STDAPICALLTYPE Buf_Restore(IDirectSoundBuffer8* /*This*/) {
     return S_OK;
 }
 
-static HRESULT Buf_SetFX(IDirectSoundBuffer8* /*This*/, DWORD /*dwEffectsCount*/, void* /*pDSFXDesc*/, DWORD* /*pdwResultCodes*/) {
+static HRESULT DS_STDAPICALLTYPE Buf_SetFX(IDirectSoundBuffer8* /*This*/, DWORD /*dwEffectsCount*/, void* /*pDSFXDesc*/, DWORD* /*pdwResultCodes*/) {
     return DSERR_CONTROLUNAVAIL;
 }
 
-static HRESULT Buf_AcquireResources(IDirectSoundBuffer8* /*This*/, DWORD /*dwFlags*/, DWORD /*dwEffectsCount*/, DWORD* /*pdwResultCodes*/) {
+static HRESULT DS_STDAPICALLTYPE Buf_AcquireResources(IDirectSoundBuffer8* /*This*/, DWORD /*dwFlags*/, DWORD /*dwEffectsCount*/, DWORD* /*pdwResultCodes*/) {
     return S_OK;
 }
 
-static HRESULT Buf_GetObjectInPath(IDirectSoundBuffer8* /*This*/, REFGUID /*rguidObject*/, DWORD /*dwIndex*/, REFGUID /*rguidInterface*/, void** /*ppObject*/) {
+static HRESULT DS_STDAPICALLTYPE Buf_GetObjectInPath(IDirectSoundBuffer8* /*This*/, REFGUID /*rguidObject*/, DWORD /*dwIndex*/, REFGUID /*rguidInterface*/, void** /*ppObject*/) {
     return DSERR_CONTROLUNAVAIL;
 }
 
@@ -477,97 +477,97 @@ static DirectSoundBufferImpl* Buf3D_Impl(IDirectSound3DBuffer* This) {
     return reinterpret_cast<DirectSoundBufferImpl*>(reinterpret_cast<char*>(This) - offsetof(DirectSoundBufferImpl, lpVtbl3DBuffer));
 }
 
-static HRESULT Buf3D_QueryInterface(IDirectSound3DBuffer* This, REFIID riid, void** ppvObject) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_QueryInterface(IDirectSound3DBuffer* This, REFIID riid, void** ppvObject) {
     return Buf3D_Impl(This)->QueryInterface(riid, ppvObject);
 }
 
-static ULONG Buf3D_AddRef(IDirectSound3DBuffer* This) {
+static ULONG DS_STDAPICALLTYPE Buf3D_AddRef(IDirectSound3DBuffer* This) {
     return Buf3D_Impl(This)->AddRef();
 }
 
-static ULONG Buf3D_Release(IDirectSound3DBuffer* This) {
+static ULONG DS_STDAPICALLTYPE Buf3D_Release(IDirectSound3DBuffer* This) {
     return Buf3D_Impl(This)->Release();
 }
 
-static HRESULT Buf3D_GetAllParameters(IDirectSound3DBuffer* This, DS3DBUFFER* pBuffer) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_GetAllParameters(IDirectSound3DBuffer* This, DS3DBUFFER* pBuffer) {
     if (!This || !pBuffer) return DSERR_INVALIDPARAM;
     return (eax_buffer_get_3d_all_parameters(Buf3D_Impl(This)->nativeBuffer, pBuffer) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_GetConeAngles(IDirectSound3DBuffer* This, DWORD* pdwInsideConeAngle, DWORD* pdwOutsideConeAngle) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_GetConeAngles(IDirectSound3DBuffer* This, DWORD* pdwInsideConeAngle, DWORD* pdwOutsideConeAngle) {
     if (!This || !pdwInsideConeAngle || !pdwOutsideConeAngle) return DSERR_INVALIDPARAM;
     return (eax_buffer_get_3d_cone_angles(Buf3D_Impl(This)->nativeBuffer, pdwInsideConeAngle, pdwOutsideConeAngle) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_GetConeOrientation(IDirectSound3DBuffer* This, D3DVECTOR* pvConeOrientation) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_GetConeOrientation(IDirectSound3DBuffer* This, D3DVECTOR* pvConeOrientation) {
     if (!This || !pvConeOrientation) return DSERR_INVALIDPARAM;
     return (eax_buffer_get_3d_cone_orientation(Buf3D_Impl(This)->nativeBuffer, pvConeOrientation) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_GetConeOutsideVolume(IDirectSound3DBuffer* This, LONG* plConeOutsideVolume) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_GetConeOutsideVolume(IDirectSound3DBuffer* This, LONG* plConeOutsideVolume) {
     if (!This || !plConeOutsideVolume) return DSERR_INVALIDPARAM;
     return (eax_buffer_get_3d_cone_outside_volume(Buf3D_Impl(This)->nativeBuffer, plConeOutsideVolume) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_GetMaxDistance(IDirectSound3DBuffer* This, D3DVALUE* pflMaxDistance) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_GetMaxDistance(IDirectSound3DBuffer* This, D3DVALUE* pflMaxDistance) {
     if (!This || !pflMaxDistance) return DSERR_INVALIDPARAM;
     return (eax_buffer_get_3d_max_distance(Buf3D_Impl(This)->nativeBuffer, pflMaxDistance) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_GetMinDistance(IDirectSound3DBuffer* This, D3DVALUE* pflMinDistance) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_GetMinDistance(IDirectSound3DBuffer* This, D3DVALUE* pflMinDistance) {
     if (!This || !pflMinDistance) return DSERR_INVALIDPARAM;
     return (eax_buffer_get_3d_min_distance(Buf3D_Impl(This)->nativeBuffer, pflMinDistance) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_GetMode(IDirectSound3DBuffer* This, DWORD* pdwMode) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_GetMode(IDirectSound3DBuffer* This, DWORD* pdwMode) {
     if (!This || !pdwMode) return DSERR_INVALIDPARAM;
     return (eax_buffer_get_3d_mode(Buf3D_Impl(This)->nativeBuffer, pdwMode) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_GetPosition(IDirectSound3DBuffer* This, D3DVECTOR* pvPosition) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_GetPosition(IDirectSound3DBuffer* This, D3DVECTOR* pvPosition) {
     if (!This || !pvPosition) return DSERR_INVALIDPARAM;
     return (eax_buffer_get_3d_position(Buf3D_Impl(This)->nativeBuffer, pvPosition) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_GetVelocity(IDirectSound3DBuffer* This, D3DVECTOR* pvVelocity) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_GetVelocity(IDirectSound3DBuffer* This, D3DVECTOR* pvVelocity) {
     if (!This || !pvVelocity) return DSERR_INVALIDPARAM;
     return (eax_buffer_get_3d_velocity(Buf3D_Impl(This)->nativeBuffer, pvVelocity) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_SetAllParameters(IDirectSound3DBuffer* This, LPCDS3DBUFFER pcBuffer, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_SetAllParameters(IDirectSound3DBuffer* This, LPCDS3DBUFFER pcBuffer, DWORD dwApply) {
     if (!This || !pcBuffer) return DSERR_INVALIDPARAM;
     return (eax_buffer_set_3d_all_parameters(Buf3D_Impl(This)->nativeBuffer, pcBuffer, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_SetConeAngles(IDirectSound3DBuffer* This, DWORD dwInsideConeAngle, DWORD dwOutsideConeAngle, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_SetConeAngles(IDirectSound3DBuffer* This, DWORD dwInsideConeAngle, DWORD dwOutsideConeAngle, DWORD dwApply) {
     return (eax_buffer_set_3d_cone_angles(Buf3D_Impl(This)->nativeBuffer, dwInsideConeAngle, dwOutsideConeAngle, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_SetConeOrientation(IDirectSound3DBuffer* This, D3DVALUE x, D3DVALUE y, D3DVALUE z, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_SetConeOrientation(IDirectSound3DBuffer* This, D3DVALUE x, D3DVALUE y, D3DVALUE z, DWORD dwApply) {
     return (eax_buffer_set_3d_cone_orientation(Buf3D_Impl(This)->nativeBuffer, x, y, z, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_SetConeOutsideVolume(IDirectSound3DBuffer* This, LONG lConeOutsideVolume, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_SetConeOutsideVolume(IDirectSound3DBuffer* This, LONG lConeOutsideVolume, DWORD dwApply) {
     return (eax_buffer_set_3d_cone_outside_volume(Buf3D_Impl(This)->nativeBuffer, lConeOutsideVolume, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_SetMaxDistance(IDirectSound3DBuffer* This, D3DVALUE flMaxDistance, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_SetMaxDistance(IDirectSound3DBuffer* This, D3DVALUE flMaxDistance, DWORD dwApply) {
     return (eax_buffer_set_3d_max_distance(Buf3D_Impl(This)->nativeBuffer, flMaxDistance, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_SetMinDistance(IDirectSound3DBuffer* This, D3DVALUE flMinDistance, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_SetMinDistance(IDirectSound3DBuffer* This, D3DVALUE flMinDistance, DWORD dwApply) {
     return (eax_buffer_set_3d_min_distance(Buf3D_Impl(This)->nativeBuffer, flMinDistance, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_SetMode(IDirectSound3DBuffer* This, DWORD dwMode, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_SetMode(IDirectSound3DBuffer* This, DWORD dwMode, DWORD dwApply) {
     return (eax_buffer_set_3d_mode(Buf3D_Impl(This)->nativeBuffer, dwMode, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_SetPosition(IDirectSound3DBuffer* This, D3DVALUE x, D3DVALUE y, D3DVALUE z, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_SetPosition(IDirectSound3DBuffer* This, D3DVALUE x, D3DVALUE y, D3DVALUE z, DWORD dwApply) {
     return (eax_buffer_set_3d_position(Buf3D_Impl(This)->nativeBuffer, x, y, z, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT Buf3D_SetVelocity(IDirectSound3DBuffer* This, D3DVALUE x, D3DVALUE y, D3DVALUE z, DWORD dwApply) {
+static HRESULT DS_STDAPICALLTYPE Buf3D_SetVelocity(IDirectSound3DBuffer* This, D3DVALUE x, D3DVALUE y, D3DVALUE z, DWORD dwApply) {
     return (eax_buffer_set_3d_velocity(Buf3D_Impl(This)->nativeBuffer, x, y, z, dwApply) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
@@ -579,19 +579,19 @@ static DirectSoundBufferImpl* BufProp_Impl(IKsPropertySet* This) {
     return reinterpret_cast<DirectSoundBufferImpl*>(reinterpret_cast<char*>(This) - offsetof(DirectSoundBufferImpl, lpVtblPropSet));
 }
 
-static HRESULT BufProp_QueryInterface(IKsPropertySet* This, REFIID riid, void** ppvObject) {
+static HRESULT DS_STDAPICALLTYPE BufProp_QueryInterface(IKsPropertySet* This, REFIID riid, void** ppvObject) {
     return BufProp_Impl(This)->QueryInterface(riid, ppvObject);
 }
 
-static ULONG BufProp_AddRef(IKsPropertySet* This) {
+static ULONG DS_STDAPICALLTYPE BufProp_AddRef(IKsPropertySet* This) {
     return BufProp_Impl(This)->AddRef();
 }
 
-static ULONG BufProp_Release(IKsPropertySet* This) {
+static ULONG DS_STDAPICALLTYPE BufProp_Release(IKsPropertySet* This) {
     return BufProp_Impl(This)->Release();
 }
 
-static HRESULT BufProp_Get(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulId, void* pInstanceData, ULONG ulInstanceLength, void* pPropertyData, ULONG ulDataLength, ULONG* pulBytesReturned) {
+static HRESULT DS_STDAPICALLTYPE BufProp_Get(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulId, void* pInstanceData, ULONG ulInstanceLength, void* pPropertyData, ULONG ulDataLength, ULONG* pulBytesReturned) {
     if (!This || !rguidPropSet || !pPropertyData) return E_POINTER;
     auto* self = BufProp_Impl(This);
     eax_result_t res = eax_prop_get(self->dsParent->nativeContext, self->nativeBuffer, rguidPropSet, ulId, pInstanceData, ulInstanceLength, pPropertyData, ulDataLength, pulBytesReturned);
@@ -600,7 +600,7 @@ static HRESULT BufProp_Get(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulI
     return E_FAIL;
 }
 
-static HRESULT BufProp_Set(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulId, void* pInstanceData, ULONG ulInstanceLength, void* pPropertyData, ULONG ulDataLength) {
+static HRESULT DS_STDAPICALLTYPE BufProp_Set(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulId, void* pInstanceData, ULONG ulInstanceLength, void* pPropertyData, ULONG ulDataLength) {
     if (!This || !rguidPropSet || !pPropertyData) return E_POINTER;
     auto* self = BufProp_Impl(This);
     eax_result_t res = eax_prop_set(self->dsParent->nativeContext, self->nativeBuffer, rguidPropSet, ulId, pInstanceData, ulInstanceLength, pPropertyData, ulDataLength);
@@ -609,7 +609,7 @@ static HRESULT BufProp_Set(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulI
     return E_FAIL;
 }
 
-static HRESULT BufProp_QuerySupport(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulId, ULONG* pulTypeSupport) {
+static HRESULT DS_STDAPICALLTYPE BufProp_QuerySupport(IKsPropertySet* This, REFGUID rguidPropSet, ULONG ulId, ULONG* pulTypeSupport) {
     if (!This || !rguidPropSet || !pulTypeSupport) return E_POINTER;
     auto* self = BufProp_Impl(This);
     eax_result_t res = eax_prop_query_support(self->dsParent->nativeContext, self->nativeBuffer, rguidPropSet, ulId, pulTypeSupport);
@@ -857,7 +857,7 @@ ULONG DirectSoundBufferImpl::Release() {
 
 extern "C" {
 
-DSOUND_EXPORT HRESULT DirectSoundCreate(const GUID* /*pcGuidDevice*/, IDirectSound** ppDS, IUnknown* pUnkOuter) {
+DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE DirectSoundCreate(const GUID* /*pcGuidDevice*/, IDirectSound** ppDS, IUnknown* pUnkOuter) {
     if (!ppDS) return DSERR_INVALIDPARAM;
     if (pUnkOuter) return DSERR_NOAGGREGATION;
 
@@ -868,7 +868,7 @@ DSOUND_EXPORT HRESULT DirectSoundCreate(const GUID* /*pcGuidDevice*/, IDirectSou
     return S_OK;
 }
 
-DSOUND_EXPORT HRESULT DirectSoundCreate8(const GUID* pcGuidDevice, IDirectSound8** ppDS8, IUnknown* pUnkOuter) {
+DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE DirectSoundCreate8(const GUID* pcGuidDevice, IDirectSound8** ppDS8, IUnknown* pUnkOuter) {
     if (!ppDS8) return DSERR_INVALIDPARAM;
     if (pUnkOuter) return DSERR_NOAGGREGATION;
 
@@ -880,15 +880,15 @@ DSOUND_EXPORT HRESULT DirectSoundCreate8(const GUID* pcGuidDevice, IDirectSound8
     return S_OK;
 }
 
-DSOUND_EXPORT HRESULT DirectSoundEnumerateA(void* /*pDSEnumCallback*/, void* /*pContext*/) {
+DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE DirectSoundEnumerateA(LPDSENUMCALLBACKA /*pDSEnumCallback*/, void* /*pContext*/) {
     return S_OK;
 }
 
-DSOUND_EXPORT HRESULT DirectSoundEnumerateW(void* /*pDSEnumCallback*/, void* /*pContext*/) {
+DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE DirectSoundEnumerateW(LPDSENUMCALLBACKW /*pDSEnumCallback*/, void* /*pContext*/) {
     return S_OK;
 }
 
-DSOUND_EXPORT HRESULT GetDeviceID(const GUID* /*pGuidSrc*/, GUID* pGuidDst) {
+DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE GetDeviceID(const GUID* /*pGuidSrc*/, GUID* pGuidDst) {
     if (pGuidDst) {
         // Return default DirectSound device ID
         static const GUID DSDEVID_DefaultPlayback = {
@@ -899,20 +899,20 @@ DSOUND_EXPORT HRESULT GetDeviceID(const GUID* /*pGuidSrc*/, GUID* pGuidDst) {
     return S_OK;
 }
 
-DSOUND_EXPORT HRESULT DllCanUnloadNow() {
+DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE DllCanUnloadNow(void) {
     return S_FALSE;
 }
 
-DSOUND_EXPORT HRESULT DllGetClassObject(const GUID* /*rclsid*/, const GUID* /*riid*/, void** ppv) {
+DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE DllGetClassObject(REFCLSID /*rclsid*/, REFIID /*riid*/, void** ppv) {
     if (ppv) *ppv = nullptr;
     return E_NOTIMPL;
 }
 
-DSOUND_EXPORT HRESULT DllRegisterServer() {
+DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE DllRegisterServer(void) {
     return S_OK;
 }
 
-DSOUND_EXPORT HRESULT DllUnregisterServer() {
+DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE DllUnregisterServer(void) {
     return S_OK;
 }
 

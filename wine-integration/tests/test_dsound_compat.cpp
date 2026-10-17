@@ -32,8 +32,8 @@ static const GUID GUID_EAX20_Buffer = {
 };
 
 extern "C" {
-    HRESULT DirectSoundCreate(const GUID* pcGuidDevice, IDirectSound** ppDS, IUnknown* pUnkOuter);
-    HRESULT DirectSoundCreate8(const GUID* pcGuidDevice, IDirectSound8** ppDS8, IUnknown* pUnkOuter);
+    HRESULT DS_STDAPICALLTYPE DirectSoundCreate(const GUID* pcGuidDevice, IDirectSound** ppDS, IUnknown* pUnkOuter);
+    HRESULT DS_STDAPICALLTYPE DirectSoundCreate8(const GUID* pcGuidDevice, IDirectSound8** ppDS8, IUnknown* pUnkOuter);
 }
 
 int main() {
