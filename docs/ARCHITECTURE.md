@@ -164,6 +164,11 @@ The core audio engine operates under strict real-time safety constraints require
 
 ### 3.3 Flat C ABI Boundary Specification
 1. All functions exposed across the boundary use standard C linkage (`extern "C"`).
-2. Data structures are strictly Plain Old Data (POD) with explicit scalar widths (`uint32_t`, `int32_t`, `float`) and standard packing alignment (`#pragma pack(push, 8)`), avoiding platform-dependent padding.
-3. Handles passed across the boundary are opaque pointers (`eax_context_h`, `eax_buffer_h`).
-4. Designed for zero-overhead linkage with future Wine PE shims via standard `cdecl` / `stdcall` or Wine's `__wine_unix_call` interface.
+2. **Strict Per-Struct Packing Alignment**: A blanket `#pragma pack(push, 8)` is insufficient across the PE/Unix boundary because DirectSound and Win32 structures have structure-specific packing constraints:
+   - Audio format structures mirroring Windows headers (such as `WAVEFORMATEX` and `WAVEFORMATEXTENSIBLE`) are strictly **2-byte packed** (`#pragma pack(push, 2)`).
+   - DirectSound structures (`DSCAPS`, `DSBCAPS`, `DS3DLISTENER`, `DS3DBUFFER`, `DSEFFECTDESC`) and EAX property structures (`EAXLISTENERPROPERTIES`, `EAXBUFFERPROPERTIES`, `EAX40CONTEXTPROPERTIES`) must mirror exact Windows SDK / MinGW-w64 field layouts without platform-dependent compiler padding.
+3. **Compile-Time Size & Offset Assertions**:
+   - Every boundary struct must define explicit `static_assert(sizeof(T) == N, "ABI size mismatch for " #T)` ensuring identical byte footprint between 32-bit/64-bit Windows PE callers and Linux ELF implementations.
+   - Test suites in `eax-native/tests/` must enforce field-level `offsetof(T, member)` checks against reference Win32 offsets to catch compiler alignment divergence.
+4. **Opaque Handles**: Handles passed across the boundary are typed opaque pointers (`eax_context_h`, `eax_buffer_h`, `eax_listener_h`), isolating internal engine state from caller memory layout.
+5. **Wine Call Compatibility**: Designed for zero-overhead linkage with future Wine PE shims via standard `cdecl` / `stdcall` dynamic linking or Wine's `__wine_unix_call` interface.
