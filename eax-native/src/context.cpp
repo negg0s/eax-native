@@ -136,7 +136,7 @@ void eax_context_s::apply_eax_reverb_to_openal() noexcept {
     ext.alEffectf(m_eax_effect, AL_EAXREVERB_REFLECTIONS_DELAY, std::clamp(eax_listener.flReflectionsDelay, 0.0f, 0.3f));
     ext.alEffectf(m_eax_effect, AL_EAXREVERB_LATE_REVERB_GAIN, eax::mb_to_gain(eax_listener.lReverb));
     ext.alEffectf(m_eax_effect, AL_EAXREVERB_LATE_REVERB_DELAY, std::clamp(eax_listener.flReverbDelay, 0.0f, 0.1f));
-    ext.alEffectf(m_eax_effect, AL_EAXREVERB_ENVIRONMENT_DIFFUSION, std::clamp(eax_listener.flEnvironmentDiffusion, 0.0f, 1.0f));
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_DIFFUSION, std::clamp(eax_listener.flEnvironmentDiffusion, 0.0f, 1.0f));
 
     // Commit effect to auxiliary slot
     ext.alAuxiliaryEffectSloti(m_eax_slot, AL_EFFECTSLOT_EFFECT, static_cast<ALint>(m_eax_effect));
