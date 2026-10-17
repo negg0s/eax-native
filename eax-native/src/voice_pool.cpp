@@ -66,6 +66,7 @@ void eax_buffer_s::reset() noexcept {
     eax20 = {};
     eax20_deferred = {};
     eax20_has_deferred = false;
+    eax10_mix.store(0.0f, std::memory_order_relaxed);
 
     if (al_source != 0) {
         alSourceStop(al_source);

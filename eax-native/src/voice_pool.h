@@ -58,6 +58,15 @@ struct eax_buffer_s {
     eax20_buffer_properties_t eax20{};
     eax20_buffer_properties_t eax20_deferred{};
     bool eax20_has_deferred{false};
+    std::atomic<float> eax10_mix{0.0f};
+
+    void commit_deferred_eax20() noexcept {
+        if (eax20_has_deferred) {
+            eax20 = eax20_deferred;
+            eax20_has_deferred = false;
+            sync_to_openal();
+        }
+    }
 
     void init_openal(eax_context_s* ctx) noexcept;
     void destroy_openal() noexcept;
