@@ -46,6 +46,7 @@ static void on_process(void* userdata, struct spa_io_position* position) {
     if (!self || !self->is_running.load(std::memory_order_relaxed)) return;
 
     const uint32_t n_frames = position ? position->clock.duration : 1024;
+    // Guard against rogue quantum spikes and buffer overflows by clamping to pre-allocated RT scratch limit
     const uint32_t safe_frames = (n_frames > eax_pipewire_filter_s::RT_SCRATCH_MAX_FRAMES)
                                      ? eax_pipewire_filter_s::RT_SCRATCH_MAX_FRAMES
                                      : n_frames;
@@ -101,6 +102,11 @@ EAX_API eax_pipewire_filter_t* eax_pipewire_filter_create(
     uint32_t sample_rate,
     uint32_t channels
 ) {
+    // PipeWire EAX filter strictly requires 2 channels (stereo). Reject non-stereo requests.
+    if (channels != 2) {
+        return nullptr;
+    }
+
     static std::atomic<bool> pw_initialized{false};
     bool expected = false;
     if (pw_initialized.compare_exchange_strong(expected, true)) {
@@ -113,7 +119,7 @@ EAX_API eax_pipewire_filter_t* eax_pipewire_filter_create(
     filter->context = context;
     filter->name = name ? name : "eax-filter";
     filter->sample_rate = sample_rate ? sample_rate : 48000;
-    filter->channels = channels ? channels : 2;
+    filter->channels = 2;
 
     filter->main_loop = pw_main_loop_new(nullptr);
     if (!filter->main_loop) {
@@ -138,8 +144,15 @@ EAX_API eax_pipewire_filter_t* eax_pipewire_filter_create(
         filter
     );
 
-    if (filter->filter) {
-        // DSP Audio Ports: Output Left & Output Right
+    if (!filter->filter) {
+        if (filter->main_loop) {
+            pw_main_loop_destroy(filter->main_loop);
+        }
+        delete filter;
+        return nullptr;
+    }
+
+    // DSP Audio Ports: Output Left & Output Right
         uint8_t buffer_l[1024];
         struct spa_pod_builder b_l = SPA_POD_BUILDER_INIT(buffer_l, sizeof(buffer_l));
         struct spa_audio_info_dsp dsp_info_l{};
@@ -185,7 +198,6 @@ EAX_API eax_pipewire_filter_t* eax_pipewire_filter_create(
             params_r,
             1
         );
-    }
 
     return filter;
 }
@@ -207,13 +219,15 @@ EAX_API int eax_pipewire_filter_start(eax_pipewire_filter_t* filter) {
     }
 
     if (connect_res == 0) {
-        filter->is_connected.store(true, std::memory_order_release);
+        // Connection initiated; on_state_changed handles transitioning to
+        // PW_FILTER_STATE_STREAMING where is_connected is set to true.
         filter->loop_thread = std::thread([filter]() {
             pw_main_loop_run(filter->main_loop);
         });
     } else {
-        // PipeWire daemon is not present/running in this container/session.
-        // Operate in local RT audio driving mode so benchmarks, unit tests, and CLI demos work standalone.
+        // PipeWire daemon is not present or unreachable (e.g. headless container, WSL, or CI without PW daemon).
+        // Diagnostic fallback RT audio loop: drives audio rendering at periodic intervals (~5.33ms / 256 frames at 48kHz)
+        // so benchmarks, unit tests, and headless CLI demos can execute reliably without a live daemon.
         filter->is_connected.store(false, std::memory_order_release);
         filter->loop_thread = std::thread([filter]() {
             const auto period = std::chrono::microseconds(5333); // ~256 frames at 48kHz
@@ -266,6 +280,7 @@ EAX_API int eax_pipewire_filter_process_block(
     if (!filter || !out_pcm || n_frames == 0) return EAX_PW_ERR_INVALID_PARAM;
     (void)in_pcm;
 
+    // Guard against rogue quantum spikes and buffer overflows by clamping to pre-allocated RT scratch limit
     const uint32_t safe_frames = (n_frames > eax_pipewire_filter_s::RT_SCRATCH_MAX_FRAMES)
                                      ? eax_pipewire_filter_s::RT_SCRATCH_MAX_FRAMES
                                      : n_frames;

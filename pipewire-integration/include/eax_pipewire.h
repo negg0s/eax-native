@@ -21,12 +21,13 @@ typedef struct eax_pipewire_filter_s eax_pipewire_filter_t;
 
 /**
  * Create a PipeWire DSP real-time node filter instance wrapping an eax_context_h.
+ * Note: Only stereo (channels == 2) is supported. Rejects channels != 2 with nullptr.
  *
  * @param context       eax-native audio context handle
  * @param name          Media / node name for PipeWire graph (e.g. "eax-filter")
  * @param sample_rate   Sample rate in Hz (e.g. 44100 or 48000)
- * @param channels      Number of output channels (e.g. 2 for stereo)
- * @return              Pointer to filter instance, or nullptr on failure
+ * @param channels      Number of output channels (must be exactly 2 for stereo)
+ * @return              Pointer to filter instance, or nullptr on failure or invalid parameter
  */
 EAX_API eax_pipewire_filter_t* eax_pipewire_filter_create(
     eax_context_h context,
