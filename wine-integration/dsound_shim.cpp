@@ -419,7 +419,17 @@ static HRESULT DS_STDAPICALLTYPE Buf_SetCurrentPosition(IDirectSoundBuffer8* Thi
     return (eax_buffer_set_current_position(self->nativeBuffer, dwNewPosition) == EAX_OK) ? S_OK : DSERR_GENERIC;
 }
 
-static HRESULT DS_STDAPICALLTYPE Buf_SetFormat(IDirectSoundBuffer8* /*This*/, const WAVEFORMATEX* /*pcfxFormat*/) {
+static HRESULT DS_STDAPICALLTYPE Buf_SetFormat(IDirectSoundBuffer8* This, const WAVEFORMATEX* pcfxFormat) {
+    if (!This) return DSERR_INVALIDPARAM;
+    auto* self = reinterpret_cast<DirectSoundBufferImpl*>(This);
+    if (!self->isPrimary) {
+        // DirectSound specification: SetFormat is only valid on the primary sound buffer
+        return E_FAIL;
+    }
+    if (!pcfxFormat) return DSERR_INVALIDPARAM;
+    // Primary buffer format reconfiguration: cache requested output format.
+    // TODO: Dynamic hardware device rate/channel reconfiguration is Phase 3 scope.
+    self->format = *pcfxFormat;
     return S_OK;
 }
 
@@ -880,11 +890,25 @@ DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE DirectSoundCreate8(const GUID* pcGuidDev
     return S_OK;
 }
 
-DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE DirectSoundEnumerateA(LPDSENUMCALLBACKA /*pDSEnumCallback*/, void* /*pContext*/) {
+DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE DirectSoundEnumerateA(LPDSENUMCALLBACKA pDSEnumCallback, void* pContext) {
+    if (pDSEnumCallback) {
+        static const GUID DSDEVID_DefaultPlayback = {
+            0xDEF00000, 0x9C6D, 0x47ED, {0xAA, 0xF1, 0x4D, 0xDA, 0x8F, 0x2B, 0x5C, 0x03}
+        };
+        GUID devGuid = DSDEVID_DefaultPlayback;
+        pDSEnumCallback(&devGuid, "Primary Sound Driver", "", pContext);
+    }
     return S_OK;
 }
 
-DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE DirectSoundEnumerateW(LPDSENUMCALLBACKW /*pDSEnumCallback*/, void* /*pContext*/) {
+DSOUND_EXPORT HRESULT DS_STDAPICALLTYPE DirectSoundEnumerateW(LPDSENUMCALLBACKW pDSEnumCallback, void* pContext) {
+    if (pDSEnumCallback) {
+        static const GUID DSDEVID_DefaultPlayback = {
+            0xDEF00000, 0x9C6D, 0x47ED, {0xAA, 0xF1, 0x4D, 0xDA, 0x8F, 0x2B, 0x5C, 0x03}
+        };
+        GUID devGuid = DSDEVID_DefaultPlayback;
+        pDSEnumCallback(&devGuid, L"Primary Sound Driver", L"", pContext);
+    }
     return S_OK;
 }
 
