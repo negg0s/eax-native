@@ -6,6 +6,9 @@
 #ifndef AL_PANNING_ENABLED_SOFT
 #define AL_PANNING_ENABLED_SOFT 0x19EC
 #endif
+#ifndef AL_PAN_SOFT
+#define AL_PAN_SOFT 0x19ED
+#endif
 
 extern "C" {
 
