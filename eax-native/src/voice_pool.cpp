@@ -1,4 +1,14 @@
 #include "voice_pool.h"
+
+// AL_SOFT_source_panning constants are missing from OpenAL headers that
+// predate the extension (Ubuntu's apt package). Fallback to the values
+// from openal-soft's alext.h.
+#ifndef AL_PANNING_ENABLED_SOFT
+#define AL_PANNING_ENABLED_SOFT 0x19EC
+#endif
+#ifndef AL_PAN_SOFT
+#define AL_PAN_SOFT 0x19ED
+#endif
 #include "context.h"
 #include "spatializer.h"
 #include <cstring>
