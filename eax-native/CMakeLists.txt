@@ -105,6 +105,7 @@ if(EAX_SANITIZER_OPTIONS)
 endif()
 
 install(TARGETS eax-native
+    EXPORT eax-native-targets
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

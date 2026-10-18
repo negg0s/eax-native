@@ -12,7 +12,25 @@
 #include <algorithm>
 #include "eax_native_abi.h"
 #include "eax_reverb.h"
+#ifdef EAX_WITH_PIPEWIRE
 #include "eax_pipewire.h"
+#define EAX_PW_ENABLED 1
+#else
+// Builds without the PipeWire subproject (default on Windows): provide
+// no-op stubs so the same source compiles; the pw backend reports a
+// friendly fallback below.
+struct eax_pipewire_filter_t {
+    int unused;
+};
+static inline eax_pipewire_filter_t* eax_pipewire_filter_create(eax_context_h, const char*, uint32_t, uint32_t) {
+    return nullptr;
+}
+static inline void eax_pipewire_filter_start(eax_pipewire_filter_t*) {}
+static inline void eax_pipewire_filter_stop(eax_pipewire_filter_t*) {}
+static inline void eax_pipewire_filter_destroy(eax_pipewire_filter_t*) {}
+static inline bool eax_pipewire_filter_is_connected(eax_pipewire_filter_t*) { return false; }
+#define EAX_PW_ENABLED 0
+#endif
 
 namespace fs = std::filesystem;
 
@@ -456,7 +474,11 @@ int main(int argc, char* argv[]) {
     std::string subcommand = argv[1];
     std::string appid = "";
     std::string prefix = "";
+#if EAX_PW_ENABLED
     std::string backend = "pipewire";
+#else
+    std::string backend = "openal";
+#endif
     float duration = 3.5f;
     bool headless = false;
     std::string output_wav = "";

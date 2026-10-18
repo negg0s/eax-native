@@ -10,7 +10,13 @@ enable_testing()
 
 # Optional components: PE shim needs a MinGW cross toolchain (or native MinGW),
 # PipeWire needs pipewire dev headers (Linux only)
-option(EAX_BUILD_WINE_SHIM "Build Wine dsound PE shim" ON)
+# The Wine PE shim is MinGW/wine-target code; MSVC cannot compile it
+# (conflicting cdecl/extern decls for DirectSound*), so default it off there.
+if(MSVC)
+    option(EAX_BUILD_WINE_SHIM "Build Wine dsound PE shim" OFF)
+else()
+    option(EAX_BUILD_WINE_SHIM "Build Wine dsound PE shim" ON)
+endif()
 set(EAX_BUILD_PIPEWIRE_DEFAULT ON)
 if(WIN32)
     set(EAX_BUILD_PIPEWIRE_DEFAULT OFF)
