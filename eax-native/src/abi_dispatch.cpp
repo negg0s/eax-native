@@ -3,6 +3,13 @@
 #include <cstring>
 #include <new>
 
+#ifndef AL_PANNING_ENABLED_SOFT
+#define AL_PANNING_ENABLED_SOFT 0x19EC
+#endif
+#ifndef AL_PAN_SOFT
+#define AL_PAN_SOFT 0x19ED
+#endif
+
 extern "C" {
 
 EAX_API eax_result_t eax_context_create(eax_context_h* out_context) {

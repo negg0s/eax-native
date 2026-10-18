@@ -10,6 +10,18 @@
 
 namespace eax {
 
+// LPEAXSETDIRECT / LPEAXGETDIRECT come from the AL_EXT_EAX extension
+// (EAX SDK header or openal-soft alext.h). Ubuntu/OpenAL headers ship
+// without AL_EXT_EAX, so declare the manager-compatible fallbacks here.
+// The pointers are only resolved via alGetProcAddress and never called
+// directly, so a signature mismatch in the fallback is harmless.
+#ifndef LPEAXSETDIRECT
+typedef void (AL_APIENTRY *LPEAXSETDIRECT)(ALuint, ALuint, void *);
+#endif
+#ifndef LPEAXGETDIRECT
+typedef void (AL_APIENTRY *LPEAXGETDIRECT)(ALuint, ALuint, void *);
+#endif
+
 struct OpenALExtensionFunctions {
     // EFX Functions
     LPALGENEFFECTS alGenEffects{nullptr};
