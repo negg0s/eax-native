@@ -81,9 +81,13 @@ target_include_directories(eax-native
 )
 
 if(TARGET OpenAL)
-    target_link_libraries(eax-native PUBLIC OpenAL)
+    # PRIVATE: public headers (include/) do not include AL/*, so OpenAL is an
+    # implementation detail. PUBLIC would break install(EXPORT ...) whenever
+    # OpenAL comes from a target that is not part of the export set (e.g. the
+    # vendored EXCLUDE_FROM_ALL openal-soft subproject).
+    target_link_libraries(eax-native PRIVATE OpenAL)
 elseif(OPENAL_LIBRARY)
-    target_link_libraries(eax-native PUBLIC ${OPENAL_LIBRARY})
+    target_link_libraries(eax-native PRIVATE ${OPENAL_LIBRARY})
 endif()
 
 target_compile_definitions(eax-native
@@ -101,17 +105,22 @@ if(EAX_SANITIZER_OPTIONS)
 endif()
 
 install(TARGETS eax-native
-    EXPORT eax-native-targets
+    RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
-    RUNTIME DESTINATION bin
 )
 install(DIRECTORY include/ DESTINATION include)
-install(EXPORT eax-native-targets
-    FILE eax-native-targets.cmake
-    NAMESPACE eax::
-    DESTINATION lib/cmake/eax-native
-)
+# install(EXPORT ...) is only valid when eax-native has no non-exported
+# linked targets in its interface. With the vendored openal-soft
+# (EXCLUDE_FROM_ALL subproject) the OpenAL target cannot be exported, so
+# skip the CMake config package in that build (the library installs fine).
+if(NOT TARGET OpenAL)
+    install(EXPORT eax-native-targets
+        FILE eax-native-targets.cmake
+        NAMESPACE eax::
+        DESTINATION lib/cmake/eax-native
+    )
+endif()
 # Demo executable
 if(EAX_BUILD_DEMO)
     add_executable(eax_demo
@@ -156,6 +165,13 @@ if(EAX_BUILD_TESTS)
     )
 
     target_link_libraries(eax_tests PRIVATE eax-native ${CMAKE_DL_LIBS})
+    # tests call alGetSource* directly, so link OpenAL explicitly (it is
+    # PRIVATE inside eax-native and does not propagate).
+    if(TARGET OpenAL)
+        target_link_libraries(eax_tests PRIVATE OpenAL)
+    elseif(OPENAL_LIBRARY)
+        target_link_libraries(eax_tests PRIVATE ${OPENAL_LIBRARY})
+    endif()
 
     if(EAX_COMPILE_OPTIONS)
         target_compile_options(eax_tests PRIVATE ${EAX_COMPILE_OPTIONS})
@@ -172,4 +188,17 @@ if(EAX_BUILD_TESTS)
     endif()
 
     add_test(NAME eax_unit_tests COMMAND eax_tests)
+
+    # The test drivers call OpenAL directly, so they must load the OpenAL
+    # runtime they were actually built against - not whatever OpenAL32.dll
+    # happens to sit in the system directory (Creative's runtime crashes
+    # this stack: segfault at context destroy / process exit). Copy the
+    # vendored runtime next to the binaries when we built it here.
+    if(TARGET OpenAL)
+        add_custom_command(TARGET eax_tests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:OpenAL> $<TARGET_FILE_DIR:eax_tests>
+            COMMENT "Deploying vendored OpenAL runtime next to the test binary"
+        )
+    endif()
 endif()

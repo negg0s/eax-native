@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include "eax_native_abi.h"
 #include <AL/al.h>
 #include <AL/alc.h>
 #include <AL/alext.h>
@@ -65,7 +66,8 @@ struct OpenALExtensionFunctions {
 };
 
 // Global or context-local extension function table
-OpenALExtensionFunctions& get_al_ext() noexcept;
+// EAX_API so Windows shared builds export it (the test suite links it).
+EAX_API OpenALExtensionFunctions& get_al_ext() noexcept;
 
 } // namespace eax
 
