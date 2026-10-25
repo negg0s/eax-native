@@ -1,5 +1,8 @@
 # eax-native
 
+[![ci](https://github.com/negg0s/eax-native/actions/workflows/ci.yml/badge.svg)](https://github.com/negg0s/eax-native/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Стек для Linux, который возвращает в играх под Proton/Wine аппаратно-подобный DirectSound3D и EAX звук через OpenAL Soft и PipeWire.
 
 ## Как это работает
