@@ -234,6 +234,15 @@ EAX_API eax_result_t eax_listener_commit_deferred(eax_context_h context) {
 EAX_API eax_result_t eax_buffer_create(eax_context_h context, const eax_dsbcaps_t* caps, const eax_waveformat_ex_t* format, eax_buffer_h* out_buffer) {
     if (!context || !caps || !format || !out_buffer) return EAX_ERR_POINTER;
 
+    // Validate audio format to avoid out-of-bounds reads/writes.
+    if (format->wFormatTag != 1 || (format->nChannels != 1 && format->nChannels != 2) ||
+        (format->wBitsPerSample != 8 && format->wBitsPerSample != 16) ||
+        format->nSamplesPerSec < 8000 || format->nSamplesPerSec > 192000 ||
+        format->nBlockAlign != static_cast<uint16_t>(format->nChannels * (format->wBitsPerSample / 8)) ||
+        format->cbSize != 0) {
+        return EAX_ERR_INVALID_PARAM;
+    }
+
     auto* voice = context->voice_pool.allocate_voice();
     if (!voice) return EAX_ERR_OUT_OF_MEMORY;
 

@@ -10,6 +10,8 @@
 #include <thread>
 #include <cmath>
 #include <algorithm>
+#include <spawn.h>
+#include <sys/wait.h>
 #include "eax_native_abi.h"
 #include "eax_reverb.h"
 #ifdef EAX_WITH_PIPEWIRE
@@ -263,8 +265,14 @@ int cmd_test(const std::string& explicit_prefix) {
     }
 
     if (!test_script.empty()) {
-        std::string cmd = "bash " + test_script.string();
-        return std::system(cmd.c_str());
+        pid_t pid = 0;
+        char* argv[] = { const_cast<char*>("bash"), const_cast<char*>(test_script.c_str()), nullptr };
+        if (posix_spawn(&pid, "/bin/bash", nullptr, nullptr, argv, environ) == 0) {
+            int status = 0;
+            waitpid(pid, &status, 0);
+            return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+        }
+        return 1;
     }
 
     std::vector<fs::path> test_exe_candidates = {
@@ -276,7 +284,14 @@ int cmd_test(const std::string& explicit_prefix) {
     for (const auto& te : test_exe_candidates) {
         if (fs::exists(te)) {
             std::cout << "[eaxctl] Executing test binary: " << te.string() << "\n";
-            return std::system(te.string().c_str());
+            pid_t pid = 0;
+            char* argv[] = { const_cast<char*>(te.c_str()), nullptr };
+            if (posix_spawn(&pid, te.c_str(), nullptr, nullptr, argv, environ) == 0) {
+                int status = 0;
+                waitpid(pid, &status, 0);
+                return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+            }
+            return 1;
         }
     }
 
