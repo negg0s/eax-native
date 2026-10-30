@@ -41,11 +41,13 @@ void print_usage() {
               << "Usage:\n"
               << "  eaxctl install --appid <steam_appid> [--prefix <path>]\n"
               << "  eaxctl status [--appid <steam_appid> | --prefix <path>]\n"
+              << "  eaxctl doctor [--appid <steam_appid> | --prefix <path>]\n"
               << "  eaxctl test [--prefix <path>]\n"
               << "  eaxctl demo [--backend <pipewire|openal>] [--duration <sec>] [--headless] [--output <wav>]\n\n"
               << "Subcommands:\n"
               << "  install   Install dsound.dll shim into Proton prefix & configure registry override\n"
               << "  status    Check status of dsound override and active EAX emulation\n"
+              << "  doctor    Check prefix, shim architecture, registry override, and runtime libraries\n"
               << "  test      Run DirectSound / EAX compatibility test inside prefix\n"
               << "  demo      Run 3D fly-by demo with HRTF spatialization and EAX reverb\n";
 }
@@ -244,6 +246,89 @@ int cmd_status(const std::string& appid, const std::string& explicit_prefix) {
                   : fs::exists(dsound32) ? (m64 == 0x8664 ? "WRONG ARCH (64-bit in syswow64)" : "Not a PE file")
                   : "Not Present") << "\n";
     return 0;
+}
+
+static bool any_exists(const std::vector<fs::path>& paths) {
+    for (const auto& p : paths) {
+        if (fs::exists(p)) return true;
+    }
+    return false;
+}
+
+int cmd_doctor(const std::string& appid, const std::string& explicit_prefix) {
+    fs::path prefix = find_proton_prefix(appid, explicit_prefix);
+    std::cout << "=== eaxctl Doctor ===\n";
+    std::cout << "Target Prefix: " << prefix.string() << "\n\n";
+
+    int failures = 0;
+    auto report = [&failures](const std::string& name, bool ok, const std::string& detail) {
+        std::cout << "[" << (ok ? "ok" : "fail") << "] " << name << ": " << detail << "\n";
+        if (!ok) failures++;
+    };
+
+    report("prefix", fs::exists(prefix), fs::exists(prefix) ? "present" : "missing (run install first)");
+
+    fs::path user_reg = prefix / "user.reg";
+    report("user.reg", fs::exists(user_reg), fs::exists(user_reg) ? "present" : "missing");
+
+    bool override_native = false;
+    bool override_builtin = false;
+    if (fs::exists(user_reg)) {
+        std::ifstream reg(user_reg);
+        std::string line;
+        while (std::getline(reg, line)) {
+            if (line.find("\"dsound\"=\"native,builtin\"") != std::string::npos ||
+                line.find("\"dsound\"=\"n,b\"") != std::string::npos) {
+                override_native = true;
+            } else if (line.find("\"dsound\"=\"builtin\"") != std::string::npos ||
+                       line.find("\"dsound\"=\"b\"") != std::string::npos) {
+                override_builtin = true;
+            }
+        }
+    }
+    report("dsound override", override_native,
+           override_native ? "native,builtin"
+                           : override_builtin ? "builtin (shim will be ignored)" : "not configured");
+
+    fs::path dsound64 = prefix / "drive_c/windows/system32/dsound.dll";
+    fs::path dsound32 = prefix / "drive_c/windows/syswow64/dsound.dll";
+    const uint16_t m64 = fs::exists(dsound64) ? pe_machine(dsound64) : 0;
+    const uint16_t m32 = fs::exists(dsound32) ? pe_machine(dsound32) : 0;
+
+    report("shim 64-bit", m64 == 0x8664,
+           m64 == 0x8664 ? "x64 PE in system32"
+                         : fs::exists(dsound64) ? "wrong architecture or not a PE file"
+                                                : "missing in system32");
+
+    report("shim 32-bit", m32 == 0x014C,
+           m32 == 0x014C ? "x86 PE in syswow64"
+                         : fs::exists(dsound32) ? "wrong architecture or not a PE file"
+                                                : "missing in syswow64");
+
+    const bool openal = any_exists({
+        "/usr/lib/x86_64-linux-gnu/libopenal.so.1",
+        "/usr/lib64/libopenal.so.1",
+        "/usr/lib/libopenal.so.1",
+    });
+    report("libopenal", openal, openal ? "found" : "not found (install openal or openal-soft)");
+
+    const bool pipewire = any_exists({
+        "/usr/lib/x86_64-linux-gnu/libpipewire-0.3.so.0",
+        "/usr/lib64/libpipewire-0.3.so.0",
+        "/usr/lib/libpipewire-0.3.so.0",
+    });
+    report("libpipewire", pipewire, pipewire ? "found" : "not found (PipeWire backend unavailable)");
+
+    const bool wine = any_exists({"/usr/bin/wine", "/usr/bin/wine64"});
+    report("wine", wine, wine ? "found" : "not found (needed for the test subcommand)");
+
+    std::cout << "\n";
+    if (failures == 0) {
+        std::cout << "All checks passed.\n";
+        return 0;
+    }
+    std::cout << failures << " check(s) failed.\n";
+    return 1;
 }
 
 int cmd_test(const std::string& explicit_prefix) {
@@ -527,6 +612,8 @@ int main(int argc, char* argv[]) {
         return cmd_install(appid, prefix);
     } else if (subcommand == "status") {
         return cmd_status(appid, prefix);
+    } else if (subcommand == "doctor") {
+        return cmd_doctor(appid, prefix);
     } else if (subcommand == "test") {
         return cmd_test(prefix);
     } else if (subcommand == "demo") {

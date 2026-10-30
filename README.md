@@ -90,6 +90,14 @@ LD_LIBRARY_PATH=build/eax-native ./build/tools/eaxctl/eaxctl status
 Если игра не видит shim - напрямую найти dsound.dll в `system32`/`syswow64`
 префикса можно и вручную.
 
+Для быстрой диагностики есть `doctor`: он проверяет префикс, `user.reg`,
+архитектуру обоих shim'ов, наличие `libopenal`, `libpipewire` и `wine`, и
+возвращает ненулевой код, если что-то из этого отсутствует.
+
+```
+LD_LIBRARY_PATH=build/eax-native ./build/tools/eaxctl/eaxctl doctor --appid <steam_appid>
+```
+
 ## Известные проблемы
 
 См. `docs/review-notes.md`: там же история исправлений (R-001..R-031).
