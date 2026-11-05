@@ -239,11 +239,11 @@ int cmd_status(const std::string& appid, const std::string& explicit_prefix) {
     const uint16_t m32 = fs::exists(dsound32) ? pe_machine(dsound32) : 0;
     std::cout << "Shim 64-bit (system32): "
               << (m64 == 0x8664 ? "Installed (x64)"
-                  : fs::exists(dsound64) ? (m32 == 0x014C ? "WRONG ARCH (32-bit in system32)" : "Not a PE file")
+                  : fs::exists(dsound64) ? (m64 == 0x014C ? "WRONG ARCH (32-bit in system32)" : "Not a PE file")
                   : "Not Present") << "\n";
     std::cout << "Shim 32-bit (syswow64): "
               << (m32 == 0x014C ? "Installed (x86)"
-                  : fs::exists(dsound32) ? (m64 == 0x8664 ? "WRONG ARCH (64-bit in syswow64)" : "Not a PE file")
+                  : fs::exists(dsound32) ? (m32 == 0x8664 ? "WRONG ARCH (64-bit in syswow64)" : "Not a PE file")
                   : "Not Present") << "\n";
     return 0;
 }
