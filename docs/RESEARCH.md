@@ -177,7 +177,7 @@ Analysis of Wine's implementation in `dlls/dsound` reveals:
 | Strategy | Interception Point | Pros | Cons |
 | :--- | :--- | :--- | :--- |
 | **Strategy A: PE Drop-in (`dsound.dll`)** | Application directory or `WINEDLLOVERRIDES="dsound=n,b"` | Zero Wine modifications; isolated per-game testing; easy deployment. | Requires Windows PE cross-compilation (MinGW-w64); cannot directly link host Linux libraries without Wine Unix call bridge. |
-| **Strategy B: Wine builtin replacement** | Replace `dlls/dsound/` inside Wine tree | Seamless integration for all wine prefixes automatically. | Requires patching and rebuilding Wine or Proton; difficult to distribute via AUR. |
+| **Strategy B: Wine builtin replacement** | Replace `dlls/dsound/` inside Wine tree | Automatic integration across all wine prefixes without per-prefix overrides. | Requires patching and rebuilding Wine or Proton; difficult to distribute via AUR. |
 | **Strategy C: Split Architecture (PE Shim + Native Linux Shared Library)** | PE `dsound.dll` in Wine $\to$ flat C ABI / `__wine_unix_call` $\to$ `libeax-native.so` | Combines native PE COM compatibility with direct native Linux execution (OpenAL Soft / PipeWire direct access, low latency, no MMDevAPI overhead). | Requires maintaining a stable, decoupled C ABI boundary across the PE/Unix barrier. |
 
 **Selected Strategy for Project:** Strategy C (Split Architecture).
