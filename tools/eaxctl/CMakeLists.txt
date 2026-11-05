@@ -46,7 +46,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LE
     target_link_libraries(eaxctl PRIVATE stdc++fs)
 endif()
 
-# Latency benchmark probe — PipeWire-only by design (it measures the PW
+# Latency benchmark probe - PipeWire-only by design (it measures the PW
 # DSP filter round-trip), so build it only when the PW target exists.
 if(TARGET eax-pipewire)
     add_executable(eax_latency_bench
