@@ -16,6 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
+      - name: Verify repository constraints
+        run: python3 tools/check_constraints.py
+
       - name: Install dependencies
         run: |
           sudo apt-get update

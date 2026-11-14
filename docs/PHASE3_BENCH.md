@@ -62,7 +62,7 @@ Measured over 2,000 consecutive audio rendering blocks (256 frames @ 48 kHz):
 
 ### Key Observations:
 - **Modeled 73.9% Latency Reduction**: Native EAX + PipeWire DSP modeled round-trip latency is **10.69 ms** compared to **41.00 ms** for stock Wine simulation, well below the 40 ms threshold.
-- **Minimal DSP CPU Overhead**: PipeWire DSP compute processing utilizes only **0.51%** of the available real-time audio period budget ($T_{\text{compute}} \approx 27\ \mu\text{s}$), leaving 99.49% of the CPU budget for physics, game simulation, and rendering.
+- **Minimal DSP CPU Overhead**: PipeWire DSP compute processing uses only **0.51%** of the available real-time audio period budget ($T_{\text{compute}} \approx 27\ \mu\text{s}$), leaving 99.49% of the CPU budget for physics, game simulation, and rendering.
 - **Consistent Jitter Profile**: Latency variation between P50 and P99 is under **0.02 ms**, ensuring click-free and dropout-free audio streaming.
 
 ---
@@ -78,7 +78,7 @@ Real-time audio processing requires strict deterministic execution guarantees. T
 - **Result**: **0 dynamic allocations** (PASSED).
 
 ### 5.2 Lock-Free Voice Pool & Priority Inversion Prevention
-- Voice allocation, state querying, and playback status utilize standard C++ `std::atomic` fields with `std::memory_order_relaxed` and `std::memory_order_acquire`/`release`.
+- Voice allocation, state querying, and playback status use standard C++ `std::atomic` fields with `std::memory_order_relaxed` and `std::memory_order_acquire`/`release`.
 - The real-time rendering loop does not acquire locks held by game/control threads.
 - Concurrent stress testing verified that high-frequency control thread parameter mutations do not block the real-time audio rendering thread.
 
