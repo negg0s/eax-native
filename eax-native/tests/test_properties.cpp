@@ -157,6 +157,50 @@ TEST_CASE("EAX Property Sets: IKsPropertySet Query, Get, Set, and Deferred Commi
         float out_mix = 0.0f;
         REQUIRE(eax_prop_get(ctx, buf, &guid_eax10_buffer, 1, nullptr, 0, &out_mix, sizeof(float), nullptr) == EAX_OK);
         REQUIRE(out_mix == Catch::Approx(0.0f));
+
+        // Cone outside volume clamping [-10000, 0]
+        REQUIRE(eax_buffer_set_3d_cone_outside_volume(buf, 200, EAX_DS3D_IMMEDIATE) == EAX_OK);
+        int32_t out_vol = 0;
+        REQUIRE(eax_buffer_get_3d_cone_outside_volume(buf, &out_vol) == EAX_OK);
+        REQUIRE(out_vol == 0);
+
+        REQUIRE(eax_buffer_set_3d_cone_outside_volume(buf, -15000, EAX_DS3D_IMMEDIATE) == EAX_OK);
+        REQUIRE(eax_buffer_get_3d_cone_outside_volume(buf, &out_vol) == EAX_OK);
+        REQUIRE(out_vol == -10000);
+
+        // Cone angles clamping [0, 360]
+        REQUIRE(eax_buffer_set_3d_cone_angles(buf, 400, 500, EAX_DS3D_IMMEDIATE) == EAX_OK);
+        uint32_t in_angle = 0, out_angle = 0;
+        REQUIRE(eax_buffer_get_3d_cone_angles(buf, &in_angle, &out_angle) == EAX_OK);
+        REQUIRE(in_angle == 360);
+        REQUIRE(out_angle == 360);
+
+        // Frequency original (0) and clamping [100, 200000]
+        REQUIRE(eax_buffer_set_frequency(buf, 0) == EAX_OK);
+        uint32_t freq = 0;
+        REQUIRE(eax_buffer_get_frequency(buf, &freq) == EAX_OK);
+        REQUIRE(freq >= 8000);
+
+        REQUIRE(eax_buffer_set_frequency(buf, 500000) == EAX_OK);
+        REQUIRE(eax_buffer_get_frequency(buf, &freq) == EAX_OK);
+        REQUIRE(freq == 200000);
+
+        // All 3D buffer parameters sanitize
+        eax_ds3dbuffer_t ds3d_test{};
+        ds3d_test.dwSize = sizeof(eax_ds3dbuffer_t);
+        ds3d_test.lConeOutsideVolume = 1000;
+        ds3d_test.dwInsideConeAngle = 720;
+        ds3d_test.dwOutsideConeAngle = 720;
+        ds3d_test.flMinDistance = -5.0f;
+        ds3d_test.flMaxDistance = -10.0f;
+        REQUIRE(eax_buffer_set_3d_all_parameters(buf, &ds3d_test, EAX_DS3D_IMMEDIATE) == EAX_OK);
+        eax_ds3dbuffer_t ds3d_out{};
+        REQUIRE(eax_buffer_get_3d_all_parameters(buf, &ds3d_out) == EAX_OK);
+        REQUIRE(ds3d_out.lConeOutsideVolume == 0);
+        REQUIRE(ds3d_out.dwInsideConeAngle == 360);
+        REQUIRE(ds3d_out.dwOutsideConeAngle == 360);
+        REQUIRE(ds3d_out.flMinDistance >= 1.0f);
+        REQUIRE(ds3d_out.flMaxDistance >= ds3d_out.flMinDistance);
     }
 
     REQUIRE(eax_buffer_destroy(buf) == EAX_OK);

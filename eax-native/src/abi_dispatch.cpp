@@ -87,12 +87,16 @@ EAX_API eax_result_t eax_listener_get_all_parameters(eax_context_h context, eax_
 
 EAX_API eax_result_t eax_listener_set_all_parameters(eax_context_h context, const eax_ds3dlistener_t* params, uint32_t apply_mode) {
     if (!context || !params) return EAX_ERR_POINTER;
+    eax_ds3dlistener_t sanitized = *params;
+    if (!std::isfinite(sanitized.flDistanceFactor) || sanitized.flDistanceFactor <= 0.0f) sanitized.flDistanceFactor = 1.0f;
+    if (!std::isfinite(sanitized.flRolloffFactor) || sanitized.flRolloffFactor < 0.0f) sanitized.flRolloffFactor = 1.0f;
+    if (!std::isfinite(sanitized.flDopplerFactor) || sanitized.flDopplerFactor < 0.0f) sanitized.flDopplerFactor = 1.0f;
     if (apply_mode == EAX_DS3D_DEFERRED) {
-        context->listener_deferred = *params;
+        context->listener_deferred = sanitized;
         context->listener_has_deferred = true;
     } else {
         context->listener_seqlock.write_begin();
-        context->listener = *params;
+        context->listener = sanitized;
         context->listener_seqlock.write_end();
         context->sync_listener_to_openal();
     }
@@ -170,7 +174,7 @@ EAX_API eax_result_t eax_listener_get_distance_factor(eax_context_h context, flo
 }
 
 EAX_API eax_result_t eax_listener_set_distance_factor(eax_context_h context, float factor, uint32_t apply_mode) {
-    if (!context || factor <= 0.0f) return EAX_ERR_INVALID_PARAM;
+    if (!context || !std::isfinite(factor) || factor <= 0.0f) return EAX_ERR_INVALID_PARAM;
     if (apply_mode == EAX_DS3D_DEFERRED) {
         context->listener_deferred.flDistanceFactor = factor;
         context->listener_has_deferred = true;
@@ -190,7 +194,7 @@ EAX_API eax_result_t eax_listener_get_rolloff_factor(eax_context_h context, floa
 }
 
 EAX_API eax_result_t eax_listener_set_rolloff_factor(eax_context_h context, float factor, uint32_t apply_mode) {
-    if (!context || factor < 0.0f) return EAX_ERR_INVALID_PARAM;
+    if (!context || !std::isfinite(factor) || factor < 0.0f) return EAX_ERR_INVALID_PARAM;
     if (apply_mode == EAX_DS3D_DEFERRED) {
         context->listener_deferred.flRolloffFactor = factor;
         context->listener_has_deferred = true;
@@ -210,7 +214,7 @@ EAX_API eax_result_t eax_listener_get_doppler_factor(eax_context_h context, floa
 }
 
 EAX_API eax_result_t eax_listener_set_doppler_factor(eax_context_h context, float factor, uint32_t apply_mode) {
-    if (!context || factor < 0.0f) return EAX_ERR_INVALID_PARAM;
+    if (!context || !std::isfinite(factor) || factor < 0.0f) return EAX_ERR_INVALID_PARAM;
     if (apply_mode == EAX_DS3D_DEFERRED) {
         context->listener_deferred.flDopplerFactor = factor;
         context->listener_has_deferred = true;
@@ -453,10 +457,15 @@ EAX_API eax_result_t eax_buffer_get_frequency(eax_buffer_h buffer, uint32_t* out
 }
 
 EAX_API eax_result_t eax_buffer_set_frequency(eax_buffer_h buffer, uint32_t freq_hz) {
-    if (!buffer || freq_hz == 0) return EAX_ERR_INVALID_PARAM;
-    buffer->frequency_hz.store(freq_hz, std::memory_order_relaxed);
+    if (!buffer) return EAX_ERR_INVALID_PARAM;
+    uint32_t eff_freq = freq_hz;
+    if (eff_freq == 0) {
+        eff_freq = buffer->format.nSamplesPerSec ? buffer->format.nSamplesPerSec : 44100;
+    }
+    eff_freq = std::clamp(eff_freq, 100u, 200000u);
+    buffer->frequency_hz.store(eff_freq, std::memory_order_relaxed);
     if (buffer->al_source != 0) {
-        const float pitch = static_cast<float>(freq_hz) / static_cast<float>(buffer->format.nSamplesPerSec ? buffer->format.nSamplesPerSec : 44100);
+        const float pitch = static_cast<float>(eff_freq) / static_cast<float>(buffer->format.nSamplesPerSec ? buffer->format.nSamplesPerSec : 44100);
         alSourcef(buffer->al_source, AL_PITCH, pitch);
     }
     return EAX_OK;
@@ -472,12 +481,20 @@ EAX_API eax_result_t eax_buffer_get_3d_all_parameters(eax_buffer_h buffer, eax_d
 
 EAX_API eax_result_t eax_buffer_set_3d_all_parameters(eax_buffer_h buffer, const eax_ds3dbuffer_t* params, uint32_t apply_mode) {
     if (!buffer || !params) return EAX_ERR_POINTER;
+    eax_ds3dbuffer_t sanitized = *params;
+    sanitized.lConeOutsideVolume = std::clamp(sanitized.lConeOutsideVolume, -10000, 0);
+    sanitized.dwInsideConeAngle = std::clamp(sanitized.dwInsideConeAngle, 0u, 360u);
+    sanitized.dwOutsideConeAngle = std::clamp(sanitized.dwOutsideConeAngle, 0u, 360u);
+    if (!std::isfinite(sanitized.flMinDistance) || sanitized.flMinDistance <= 0.0f) sanitized.flMinDistance = 1.0f;
+    if (!std::isfinite(sanitized.flMaxDistance) || sanitized.flMaxDistance < sanitized.flMinDistance) {
+        sanitized.flMaxDistance = std::max(sanitized.flMinDistance, 1000.0f);
+    }
     if (apply_mode == EAX_DS3D_DEFERRED) {
-        buffer->ds3d_deferred = *params;
+        buffer->ds3d_deferred = sanitized;
         buffer->ds3d_has_deferred = true;
     } else {
         buffer->ds3d_seqlock.write_begin();
-        buffer->ds3d = *params;
+        buffer->ds3d = sanitized;
         buffer->ds3d_seqlock.write_end();
         buffer->sync_to_openal();
     }
@@ -534,14 +551,16 @@ EAX_API eax_result_t eax_buffer_get_3d_cone_angles(eax_buffer_h buffer, uint32_t
 
 EAX_API eax_result_t eax_buffer_set_3d_cone_angles(eax_buffer_h buffer, uint32_t inside, uint32_t outside, uint32_t apply_mode) {
     if (!buffer) return EAX_ERR_POINTER;
+    const uint32_t clamped_in = std::clamp(inside, 0u, 360u);
+    const uint32_t clamped_out = std::clamp(outside, 0u, 360u);
     if (apply_mode == EAX_DS3D_DEFERRED) {
-        buffer->ds3d_deferred.dwInsideConeAngle = inside;
-        buffer->ds3d_deferred.dwOutsideConeAngle = outside;
+        buffer->ds3d_deferred.dwInsideConeAngle = clamped_in;
+        buffer->ds3d_deferred.dwOutsideConeAngle = clamped_out;
         buffer->ds3d_has_deferred = true;
     } else {
         buffer->ds3d_seqlock.write_begin();
-        buffer->ds3d.dwInsideConeAngle = inside;
-        buffer->ds3d.dwOutsideConeAngle = outside;
+        buffer->ds3d.dwInsideConeAngle = clamped_in;
+        buffer->ds3d.dwOutsideConeAngle = clamped_out;
         buffer->ds3d_seqlock.write_end();
         buffer->sync_to_openal();
     }
@@ -576,12 +595,13 @@ EAX_API eax_result_t eax_buffer_get_3d_cone_outside_volume(eax_buffer_h buffer, 
 
 EAX_API eax_result_t eax_buffer_set_3d_cone_outside_volume(eax_buffer_h buffer, int32_t volume_mb, uint32_t apply_mode) {
     if (!buffer) return EAX_ERR_POINTER;
+    const int32_t clamped_vol = std::clamp(volume_mb, -10000, 0);
     if (apply_mode == EAX_DS3D_DEFERRED) {
-        buffer->ds3d_deferred.lConeOutsideVolume = volume_mb;
+        buffer->ds3d_deferred.lConeOutsideVolume = clamped_vol;
         buffer->ds3d_has_deferred = true;
     } else {
         buffer->ds3d_seqlock.write_begin();
-        buffer->ds3d.lConeOutsideVolume = volume_mb;
+        buffer->ds3d.lConeOutsideVolume = clamped_vol;
         buffer->ds3d_seqlock.write_end();
         buffer->sync_to_openal();
     }
@@ -595,7 +615,7 @@ EAX_API eax_result_t eax_buffer_get_3d_min_distance(eax_buffer_h buffer, float* 
 }
 
 EAX_API eax_result_t eax_buffer_set_3d_min_distance(eax_buffer_h buffer, float dist, uint32_t apply_mode) {
-    if (!buffer || dist <= 0.0f) return EAX_ERR_INVALID_PARAM;
+    if (!buffer || !std::isfinite(dist) || dist <= 0.0f) return EAX_ERR_INVALID_PARAM;
     if (apply_mode == EAX_DS3D_DEFERRED) {
         buffer->ds3d_deferred.flMinDistance = dist;
         buffer->ds3d_has_deferred = true;
@@ -615,7 +635,7 @@ EAX_API eax_result_t eax_buffer_get_3d_max_distance(eax_buffer_h buffer, float* 
 }
 
 EAX_API eax_result_t eax_buffer_set_3d_max_distance(eax_buffer_h buffer, float dist, uint32_t apply_mode) {
-    if (!buffer || dist <= 0.0f) return EAX_ERR_INVALID_PARAM;
+    if (!buffer || !std::isfinite(dist) || dist <= 0.0f) return EAX_ERR_INVALID_PARAM;
     if (apply_mode == EAX_DS3D_DEFERRED) {
         buffer->ds3d_deferred.flMaxDistance = dist;
         buffer->ds3d_has_deferred = true;
@@ -843,7 +863,20 @@ EAX_API eax_result_t eax_prop_set(eax_context_h context, eax_buffer_h buffer, co
             }()
             : context->eax_listener;
         if (base_id == 1 && prop_len < sizeof(eax20_listener_properties_t)) return EAX_ERR_INVALID_PARAM;
-        if (base_id != 1 && !apply_eax20_listener_prop(p, base_id, prop_data, prop_len)) {
+        if (base_id == 1) {
+            p.lRoom = std::clamp(p.lRoom, -10000, 0);
+            p.lRoomHF = std::clamp(p.lRoomHF, -10000, 0);
+            p.flRoomRolloffFactor = std::isfinite(p.flRoomRolloffFactor) ? std::clamp(p.flRoomRolloffFactor, 0.0f, 10.0f) : 0.0f;
+            p.flDecayTime = (std::isfinite(p.flDecayTime) && p.flDecayTime > 0.0f) ? std::clamp(p.flDecayTime, 0.1f, 20.0f) : 1.49f;
+            p.flDecayHFRatio = (std::isfinite(p.flDecayHFRatio) && p.flDecayHFRatio > 0.0f) ? std::clamp(p.flDecayHFRatio, 0.1f, 2.0f) : 0.83f;
+            p.lReflections = std::clamp(p.lReflections, -10000, 1000);
+            p.flReflectionsDelay = std::isfinite(p.flReflectionsDelay) ? std::clamp(p.flReflectionsDelay, 0.0f, 0.3f) : 0.007f;
+            p.lReverb = std::clamp(p.lReverb, -10000, 2000);
+            p.flReverbDelay = std::isfinite(p.flReverbDelay) ? std::clamp(p.flReverbDelay, 0.0f, 0.1f) : 0.011f;
+            p.flEnvironmentSize = (std::isfinite(p.flEnvironmentSize) && p.flEnvironmentSize > 0.0f) ? std::clamp(p.flEnvironmentSize, 1.0f, 100.0f) : 7.5f;
+            p.flEnvironmentDiffusion = std::isfinite(p.flEnvironmentDiffusion) ? std::clamp(p.flEnvironmentDiffusion, 0.0f, 1.0f) : 1.0f;
+            p.flAirAbsorptionHF = std::isfinite(p.flAirAbsorptionHF) ? std::clamp(p.flAirAbsorptionHF, -100.0f, 0.0f) : -5.0f;
+        } else if (!apply_eax20_listener_prop(p, base_id, prop_data, prop_len)) {
             return EAX_ERR_PROP_UNSUPPORTED;
         }
         if (prop_id & 0x80000000u) {
@@ -869,7 +902,20 @@ EAX_API eax_result_t eax_prop_set(eax_context_h context, eax_buffer_h buffer, co
             }()
             : buffer->eax20;
         if (base_id == 1 && prop_len < sizeof(eax20_buffer_properties_t)) return EAX_ERR_INVALID_PARAM;
-        if (base_id != 1 && !apply_eax20_buffer_prop(p, base_id, prop_data, prop_len)) {
+        if (base_id == 1) {
+            p.lDirect = std::clamp(p.lDirect, -10000, 1000);
+            p.lDirectHF = std::clamp(p.lDirectHF, -10000, 0);
+            p.lRoom = std::clamp(p.lRoom, -10000, 1000);
+            p.lRoomHF = std::clamp(p.lRoomHF, -10000, 0);
+            p.flRoomRolloffFactor = std::isfinite(p.flRoomRolloffFactor) ? std::clamp(p.flRoomRolloffFactor, 0.0f, 10.0f) : 0.0f;
+            p.lObstruction = std::clamp(p.lObstruction, -10000, 0);
+            p.flObstructionLFRatio = std::isfinite(p.flObstructionLFRatio) ? std::clamp(p.flObstructionLFRatio, 0.0f, 1.0f) : 0.0f;
+            p.lOcclusion = std::clamp(p.lOcclusion, -10000, 0);
+            p.flOcclusionLFRatio = std::isfinite(p.flOcclusionLFRatio) ? std::clamp(p.flOcclusionLFRatio, 0.0f, 1.0f) : 0.25f;
+            p.flOcclusionRoomRatio = std::isfinite(p.flOcclusionRoomRatio) ? std::clamp(p.flOcclusionRoomRatio, 0.0f, 10.0f) : 1.5f;
+            p.lOutsideVolumeHF = std::clamp(p.lOutsideVolumeHF, -10000, 0);
+            p.flAirAbsorptionFactor = std::isfinite(p.flAirAbsorptionFactor) ? std::clamp(p.flAirAbsorptionFactor, 0.0f, 10.0f) : 1.0f;
+        } else if (!apply_eax20_buffer_prop(p, base_id, prop_data, prop_len)) {
             return EAX_ERR_PROP_UNSUPPORTED;
         }
         if (prop_id & 0x80000000u) {

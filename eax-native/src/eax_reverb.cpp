@@ -13,7 +13,7 @@ ReverbDSP::ReverbDSP() noexcept {
 }
 
 void ReverbDSP::configure(const eax20_listener_properties_t& props, uint32_t sample_rate) noexcept {
-    m_sample_rate = sample_rate ? sample_rate : 44100;
+    m_sample_rate = sample_rate ? std::clamp(sample_rate, 4000u, 192000u) : 44100;
     m_room_gain = mb_to_gain(props.lRoom);
     m_reverb_gain = mb_to_gain(props.lReverb);
     m_reflections_gain = mb_to_gain(props.lReflections);
@@ -25,16 +25,16 @@ void ReverbDSP::configure(const eax20_listener_properties_t& props, uint32_t sam
 
     // Feedback scalar based on decay time RT60:
     // RT60 = -3 * delay / log10(feedback) => feedback = 10^(-3 * delay / RT60)
-    const float sr_scale = static_cast<float>(m_sample_rate) / 44100.0f;
+    const double sr_scale = static_cast<double>(m_sample_rate) / 44100.0;
 
     // Comb delays (in samples at 44.1kHz, scaled by environment size)
     const float env_size = (std::isfinite(props.flEnvironmentSize) && props.flEnvironmentSize > 0.0f) ? props.flEnvironmentSize : 7.5f;
-    const float size_factor = std::clamp(env_size / 7.5f, 0.5f, 2.5f);
+    const double size_factor = static_cast<double>(std::clamp(env_size / 7.5f, 0.5f, 2.5f));
     const size_t delays_comb[4] = {
-        static_cast<size_t>(1116 * sr_scale * size_factor),
-        static_cast<size_t>(1188 * sr_scale * size_factor),
-        static_cast<size_t>(1277 * sr_scale * size_factor),
-        static_cast<size_t>(1356 * sr_scale * size_factor)
+        std::clamp<size_t>(static_cast<size_t>(1116.0 * sr_scale * size_factor), 1, 19201),
+        std::clamp<size_t>(static_cast<size_t>(1188.0 * sr_scale * size_factor), 1, 19201),
+        std::clamp<size_t>(static_cast<size_t>(1277.0 * sr_scale * size_factor), 1, 19201),
+        std::clamp<size_t>(static_cast<size_t>(1356.0 * sr_scale * size_factor), 1, 19201)
     };
 
     for (size_t i = 0; i < 4; ++i) {
@@ -45,15 +45,17 @@ void ReverbDSP::configure(const eax20_listener_properties_t& props, uint32_t sam
 
     // Allpass delays
     const size_t delays_allpass[2] = {
-        static_cast<size_t>(225 * sr_scale),
-        static_cast<size_t>(556 * sr_scale)
+        std::clamp<size_t>(static_cast<size_t>(225.0 * sr_scale), 1, 19201),
+        std::clamp<size_t>(static_cast<size_t>(556.0 * sr_scale), 1, 19201)
     };
     m_allpasses[0].init(delays_allpass[0], 0.5f);
     m_allpasses[1].init(delays_allpass[1], 0.5f);
 
     // Pre-delay buffer (combining reflections and reverb delay)
-    const float predelay_sec = std::clamp(props.flReverbDelay, 0.0f, 0.1f);
-    const size_t predelay_samples = static_cast<size_t>(predelay_sec * static_cast<float>(m_sample_rate)) + 1;
+    const double predelay_sec = (std::isfinite(props.flReverbDelay) && props.flReverbDelay >= 0.0f)
+        ? static_cast<double>(std::clamp(props.flReverbDelay, 0.0f, 0.1f))
+        : 0.011;
+    const size_t predelay_samples = std::clamp<size_t>(static_cast<size_t>(predelay_sec * static_cast<double>(m_sample_rate)) + 1, 1, 19201);
     m_predelay_buffer.assign(predelay_samples, 0.0f);
     m_predelay_idx = 0;
 }
