@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake clang g++ libopenal-dev catch2 pipewire libpipewire-0.3-dev zip
+
+      - name: Configure CMake project
+        run: |
+          cmake -B build -S . -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release -DEAX_BUILD_WINE_SHIM=off
+
+      - name: Build binaries
+        run: |
+          cmake --build build -j$(nproc)
+
+      - name: Package Linux release distribution
+        run: |
+          mkdir -p dist/bin dist/lib dist/include
+          find build -name "*.so*" -exec cp -a {} dist/lib/ \;
+          find build -type f -executable ! -name "*.so*" ! -name "*.sh" ! -name "CTestTestfile*" -exec cp {} dist/bin/ \;
+          cp -r eax-native/include/* dist/include/ 2>/dev/null || true
+          cd dist
+          zip -r eax-native-linux-x86_64.zip bin lib include
+          sha256sum eax-native-linux-x86_64.zip > eax-native-linux-x86_64.zip.sha256
+          sha256sum eax-native-linux-x86_64.zip > SHA256SUMS
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/eax-native-linux-x86_64.zip
+            dist/eax-native-linux-x86_64.zip.sha256
+            dist/SHA256SUMS
+          generate_release_notes: true
