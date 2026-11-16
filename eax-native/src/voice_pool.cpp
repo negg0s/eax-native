@@ -111,7 +111,8 @@ void eax_buffer_s::sync_to_openal() noexcept {
     alSourcef(al_source, AL_GAIN, eax::mb_to_gain(volume_mb.load(std::memory_order_relaxed)));
 
     const uint32_t freq = frequency_hz.load(std::memory_order_relaxed);
-    const float pitch = static_cast<float>(freq) / static_cast<float>(format.nSamplesPerSec ? format.nSamplesPerSec : 44100);
+    const float base_rate = static_cast<float>(format.nSamplesPerSec ? format.nSamplesPerSec : 44100);
+    const float pitch = (base_rate > 0.0f) ? std::clamp(static_cast<float>(freq) / base_rate, 0.01f, 10.0f) : 1.0f;
     alSourcef(al_source, AL_PITCH, pitch);
 
     alSourcei(al_source, AL_LOOPING, is_looping.load(std::memory_order_relaxed) ? AL_TRUE : AL_FALSE);
@@ -124,8 +125,10 @@ void eax_buffer_s::sync_to_openal() noexcept {
         alSource3f(al_source, AL_VELOCITY, snap.vVelocity.x, snap.vVelocity.y, -snap.vVelocity.z);
         alSource3f(al_source, AL_DIRECTION, snap.vConeOrientation.x, snap.vConeOrientation.y, -snap.vConeOrientation.z);
 
-        alSourcef(al_source, AL_REFERENCE_DISTANCE, snap.flMinDistance);
-        alSourcef(al_source, AL_MAX_DISTANCE, snap.flMaxDistance);
+        const float min_dist = (std::isfinite(snap.flMinDistance) && snap.flMinDistance > 0.0f) ? snap.flMinDistance : 1.0f;
+        const float max_dist = (std::isfinite(snap.flMaxDistance) && snap.flMaxDistance >= min_dist) ? snap.flMaxDistance : std::max(min_dist, 1000000.0f);
+        alSourcef(al_source, AL_REFERENCE_DISTANCE, min_dist);
+        alSourcef(al_source, AL_MAX_DISTANCE, max_dist);
         const float rolloff = context ? context->get_listener_snapshot().flRolloffFactor : 1.0f;
         alSourcef(al_source, AL_ROLLOFF_FACTOR, rolloff);
 

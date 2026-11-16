@@ -32,7 +32,7 @@ violations = []
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 for dirpath, dirnames, filenames in os.walk(root_dir):
-    if ".git" in dirpath or "build" in dirpath:
+    if ".git" in dirpath or "build" in dirpath or "third_party" in dirpath:
         continue
     for fname in filenames:
         if fname == "check_constraints.py":

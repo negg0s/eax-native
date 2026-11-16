@@ -26,6 +26,9 @@ TEST_CASE("EAX Property Sets: IKsPropertySet Query, Get, Set, and Deferred Commi
     const eax_guid_t guid_eax10_listener = {
         0x4A4E6FC1, 0xC341, 0x11D1, {0xB7, 0x3A, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00}
     };
+    const eax_guid_t guid_eax10_buffer = {
+        0x4A4E6FC0, 0xC341, 0x11D1, {0xB7, 0x3A, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00}
+    };
     const eax_guid_t guid_eax20_listener = {
         0x0306A6A8, 0xB224, 0x11D2, {0x99, 0xE5, 0x00, 0x00, 0xE8, 0xD8, 0xC7, 0x22}
     };
@@ -120,6 +123,40 @@ TEST_CASE("EAX Property Sets: IKsPropertySet Query, Get, Set, and Deferred Commi
         REQUIRE(eax_prop_get(ctx, nullptr, &guid_eax20_listener, 1, nullptr, 0, &current_props, sizeof(current_props), nullptr) == EAX_OK);
         REQUIRE(current_props.dwEnvironment == EAX_ENVIRONMENT_AUDITORIUM);
         REQUIRE(current_props.flDecayTime == Catch::Approx(5.0f));
+    }
+
+    SECTION("Boundary Values and Edge Case Clamping") {
+        // Zero decay time should clamp to valid minimum (0.1s)
+        float zero_decay = 0.0f;
+        REQUIRE(eax_prop_set(ctx, nullptr, &guid_eax20_listener, 5, nullptr, 0, &zero_decay, sizeof(float)) == EAX_OK);
+        eax20_listener_properties_t props{};
+        REQUIRE(eax_prop_get(ctx, nullptr, &guid_eax20_listener, 1, nullptr, 0, &props, sizeof(props), nullptr) == EAX_OK);
+        REQUIRE(props.flDecayTime >= 0.1f);
+
+        // Negative decay HF ratio should clamp to valid range
+        float neg_hf = -2.0f;
+        REQUIRE(eax_prop_set(ctx, nullptr, &guid_eax20_listener, 6, nullptr, 0, &neg_hf, sizeof(float)) == EAX_OK);
+        REQUIRE(eax_prop_get(ctx, nullptr, &guid_eax20_listener, 1, nullptr, 0, &props, sizeof(props), nullptr) == EAX_OK);
+        REQUIRE(props.flDecayHFRatio >= 0.1f);
+
+        // Positive volume should clamp to 0 mB (DirectSound max volume)
+        REQUIRE(eax_buffer_set_volume(buf, 500) == EAX_OK);
+        int32_t vol = 0;
+        REQUIRE(eax_buffer_get_volume(buf, &vol) == EAX_OK);
+        REQUIRE(vol == 0);
+
+        // Pan out of bounds should clamp to [-10000, 10000]
+        REQUIRE(eax_buffer_set_pan(buf, 25000) == EAX_OK);
+        int32_t pan = 0;
+        REQUIRE(eax_buffer_get_pan(buf, &pan) == EAX_OK);
+        REQUIRE(pan == 10000);
+
+        // EAX 1.0 Buffer mix negative clamping
+        float neg_mix = -0.5f;
+        REQUIRE(eax_prop_set(ctx, buf, &guid_eax10_buffer, 1, nullptr, 0, &neg_mix, sizeof(float)) == EAX_OK);
+        float out_mix = 0.0f;
+        REQUIRE(eax_prop_get(ctx, buf, &guid_eax10_buffer, 1, nullptr, 0, &out_mix, sizeof(float), nullptr) == EAX_OK);
+        REQUIRE(out_mix == Catch::Approx(0.0f));
     }
 
     REQUIRE(eax_buffer_destroy(buf) == EAX_OK);

@@ -134,14 +134,24 @@ void eax_context_s::apply_eax_reverb_to_openal() noexcept {
     // Translate EAX properties to AL_EAXREVERB_*
     ext.alEffectf(m_eax_effect, AL_EAXREVERB_GAIN, eax::mb_to_gain(eax_listener.lRoom));
     ext.alEffectf(m_eax_effect, AL_EAXREVERB_GAINHF, eax::mb_to_gain(eax_listener.lRoomHF));
-    ext.alEffectf(m_eax_effect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, eax_listener.flRoomRolloffFactor);
-    ext.alEffectf(m_eax_effect, AL_EAXREVERB_DECAY_TIME, std::clamp(eax_listener.flDecayTime, 0.1f, 20.0f));
-    ext.alEffectf(m_eax_effect, AL_EAXREVERB_DECAY_HFRATIO, std::clamp(eax_listener.flDecayHFRatio, 0.1f, 2.0f));
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, std::isfinite(eax_listener.flRoomRolloffFactor) ? std::clamp(eax_listener.flRoomRolloffFactor, 0.0f, 10.0f) : 0.0f);
+
+    const float decay_time = (std::isfinite(eax_listener.flDecayTime) && eax_listener.flDecayTime > 0.0f) ? std::clamp(eax_listener.flDecayTime, 0.1f, 20.0f) : 1.49f;
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_DECAY_TIME, decay_time);
+
+    const float decay_hf = (std::isfinite(eax_listener.flDecayHFRatio) && eax_listener.flDecayHFRatio > 0.0f) ? std::clamp(eax_listener.flDecayHFRatio, 0.1f, 2.0f) : 0.83f;
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_DECAY_HFRATIO, decay_hf);
+
     ext.alEffectf(m_eax_effect, AL_EAXREVERB_REFLECTIONS_GAIN, eax::mb_to_gain(eax_listener.lReflections));
-    ext.alEffectf(m_eax_effect, AL_EAXREVERB_REFLECTIONS_DELAY, std::clamp(eax_listener.flReflectionsDelay, 0.0f, 0.3f));
+    const float ref_delay = std::isfinite(eax_listener.flReflectionsDelay) ? std::clamp(eax_listener.flReflectionsDelay, 0.0f, 0.3f) : 0.007f;
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_REFLECTIONS_DELAY, ref_delay);
+
     ext.alEffectf(m_eax_effect, AL_EAXREVERB_LATE_REVERB_GAIN, eax::mb_to_gain(eax_listener.lReverb));
-    ext.alEffectf(m_eax_effect, AL_EAXREVERB_LATE_REVERB_DELAY, std::clamp(eax_listener.flReverbDelay, 0.0f, 0.1f));
-    ext.alEffectf(m_eax_effect, AL_EAXREVERB_DIFFUSION, std::clamp(eax_listener.flEnvironmentDiffusion, 0.0f, 1.0f));
+    const float rev_delay = std::isfinite(eax_listener.flReverbDelay) ? std::clamp(eax_listener.flReverbDelay, 0.0f, 0.1f) : 0.011f;
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_LATE_REVERB_DELAY, rev_delay);
+
+    const float diff = std::isfinite(eax_listener.flEnvironmentDiffusion) ? std::clamp(eax_listener.flEnvironmentDiffusion, 0.0f, 1.0f) : 1.0f;
+    ext.alEffectf(m_eax_effect, AL_EAXREVERB_DIFFUSION, diff);
 
     ext.alAuxiliaryEffectSloti(m_eax_slot, AL_EFFECTSLOT_EFFECT, static_cast<ALint>(m_eax_effect));
 }

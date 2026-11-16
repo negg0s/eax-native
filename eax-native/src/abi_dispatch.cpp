@@ -418,9 +418,10 @@ EAX_API eax_result_t eax_buffer_get_volume(eax_buffer_h buffer, int32_t* out_vol
 
 EAX_API eax_result_t eax_buffer_set_volume(eax_buffer_h buffer, int32_t volume_mb) {
     if (!buffer) return EAX_ERR_POINTER;
-    buffer->volume_mb.store(volume_mb, std::memory_order_relaxed);
+    const int32_t clamped_vol = std::clamp(volume_mb, -10000, 0);
+    buffer->volume_mb.store(clamped_vol, std::memory_order_relaxed);
     if (buffer->al_source != 0) {
-        alSourcef(buffer->al_source, AL_GAIN, eax::mb_to_gain(volume_mb));
+        alSourcef(buffer->al_source, AL_GAIN, eax::mb_to_gain(clamped_vol));
     }
     return EAX_OK;
 }
@@ -433,12 +434,13 @@ EAX_API eax_result_t eax_buffer_get_pan(eax_buffer_h buffer, int32_t* out_pan_mb
 
 EAX_API eax_result_t eax_buffer_set_pan(eax_buffer_h buffer, int32_t pan_mb) {
     if (!buffer) return EAX_ERR_POINTER;
-    buffer->pan_mb.store(pan_mb, std::memory_order_relaxed);
+    const int32_t clamped_pan = std::clamp(pan_mb, -10000, 10000);
+    buffer->pan_mb.store(clamped_pan, std::memory_order_relaxed);
     if (buffer->al_source != 0 && (buffer->caps.dwFlags & EAX_DSBCAPS_CTRL3D) == 0) {
         auto& ext = eax::get_al_ext();
         if (ext.has_source_panning) {
             alSourcei(buffer->al_source, AL_PANNING_ENABLED_SOFT, AL_TRUE);
-            alSourcef(buffer->al_source, AL_PAN_SOFT, eax::calculate_panning_soft(pan_mb));
+            alSourcef(buffer->al_source, AL_PAN_SOFT, eax::calculate_panning_soft(clamped_pan));
         }
     }
     return EAX_OK;
@@ -683,23 +685,23 @@ static bool apply_eax20_listener_prop(eax20_listener_properties_t& p, uint32_t b
     const uint32_t as_uint = *static_cast<const uint32_t*>(prop_data);
     const float as_float = *static_cast<const float*>(prop_data);
     switch (base_id) {
-        case 2:  p.lRoom = as_int; return true;
-        case 3:  p.lRoomHF = as_int; return true;
-        case 4:  p.flRoomRolloffFactor = as_float; return true;
-        case 5:  p.flDecayTime = as_float; return true;
-        case 6:  p.flDecayHFRatio = as_float; return true;
-        case 7:  p.lReflections = as_int; return true;
-        case 8:  p.flReflectionsDelay = as_float; return true;
-        case 9:  p.lReverb = as_int; return true;
-        case 10: p.flReverbDelay = as_float; return true;
+        case 2:  p.lRoom = std::clamp(as_int, -10000, 0); return true;
+        case 3:  p.lRoomHF = std::clamp(as_int, -10000, 0); return true;
+        case 4:  p.flRoomRolloffFactor = std::isfinite(as_float) ? std::clamp(as_float, 0.0f, 10.0f) : 0.0f; return true;
+        case 5:  p.flDecayTime = (std::isfinite(as_float) && as_float > 0.0f) ? std::clamp(as_float, 0.1f, 20.0f) : 1.49f; return true;
+        case 6:  p.flDecayHFRatio = (std::isfinite(as_float) && as_float > 0.0f) ? std::clamp(as_float, 0.1f, 2.0f) : 0.83f; return true;
+        case 7:  p.lReflections = std::clamp(as_int, -10000, 1000); return true;
+        case 8:  p.flReflectionsDelay = std::isfinite(as_float) ? std::clamp(as_float, 0.0f, 0.3f) : 0.007f; return true;
+        case 9:  p.lReverb = std::clamp(as_int, -10000, 2000); return true;
+        case 10: p.flReverbDelay = std::isfinite(as_float) ? std::clamp(as_float, 0.0f, 0.1f) : 0.011f; return true;
         case 11:
             p.dwEnvironment = as_uint;
             if (as_uint == EAX_ENVIRONMENT_GENERIC) p = eax::PRESET_GENERIC;
             else if (as_uint == EAX_ENVIRONMENT_CAVE) p = eax::PRESET_CAVE;
             return true;
-        case 12: p.flEnvironmentSize = as_float; return true;
-        case 13: p.flEnvironmentDiffusion = as_float; return true;
-        case 14: p.flAirAbsorptionHF = as_float; return true;
+        case 12: p.flEnvironmentSize = (std::isfinite(as_float) && as_float > 0.0f) ? std::clamp(as_float, 1.0f, 100.0f) : 7.5f; return true;
+        case 13: p.flEnvironmentDiffusion = std::isfinite(as_float) ? std::clamp(as_float, 0.0f, 1.0f) : 1.0f; return true;
+        case 14: p.flAirAbsorptionHF = std::isfinite(as_float) ? std::clamp(as_float, -100.0f, 0.0f) : -5.0f; return true;
         case 15: p.dwFlags = as_uint; return true;
         default: return false;
     }
@@ -740,18 +742,18 @@ static bool apply_eax20_buffer_prop(eax20_buffer_properties_t& p, uint32_t base_
     const int32_t as_int = *static_cast<const int32_t*>(prop_data);
     const float as_float = *static_cast<const float*>(prop_data);
     switch (base_id) {
-        case 2:  p.lDirect = as_int; return true;
-        case 3:  p.lDirectHF = as_int; return true;
-        case 4:  p.lRoom = as_int; return true;
-        case 5:  p.lRoomHF = as_int; return true;
-        case 6:  p.flRoomRolloffFactor = as_float; return true;
-        case 7:  p.lObstruction = as_int; return true;
-        case 8:  p.flObstructionLFRatio = as_float; return true;
-        case 9:  p.lOcclusion = as_int; return true;
-        case 10: p.flOcclusionLFRatio = as_float; return true;
-        case 11: p.flOcclusionRoomRatio = as_float; return true;
-        case 12: p.lOutsideVolumeHF = as_int; return true;
-        case 13: p.flAirAbsorptionFactor = as_float; return true;
+        case 2:  p.lDirect = std::clamp(as_int, -10000, 1000); return true;
+        case 3:  p.lDirectHF = std::clamp(as_int, -10000, 0); return true;
+        case 4:  p.lRoom = std::clamp(as_int, -10000, 1000); return true;
+        case 5:  p.lRoomHF = std::clamp(as_int, -10000, 0); return true;
+        case 6:  p.flRoomRolloffFactor = std::isfinite(as_float) ? std::clamp(as_float, 0.0f, 10.0f) : 0.0f; return true;
+        case 7:  p.lObstruction = std::clamp(as_int, -10000, 0); return true;
+        case 8:  p.flObstructionLFRatio = std::isfinite(as_float) ? std::clamp(as_float, 0.0f, 1.0f) : 0.0f; return true;
+        case 9:  p.lOcclusion = std::clamp(as_int, -10000, 0); return true;
+        case 10: p.flOcclusionLFRatio = std::isfinite(as_float) ? std::clamp(as_float, 0.0f, 1.0f) : 0.25f; return true;
+        case 11: p.flOcclusionRoomRatio = std::isfinite(as_float) ? std::clamp(as_float, 0.0f, 10.0f) : 1.5f; return true;
+        case 12: p.lOutsideVolumeHF = std::clamp(as_int, -10000, 0); return true;
+        case 13: p.flAirAbsorptionFactor = std::isfinite(as_float) ? std::clamp(as_float, 0.0f, 10.0f) : 1.0f; return true;
         case 14: p.dwFlags = static_cast<uint32_t>(as_int); return true;
         default: return false;
     }
@@ -889,7 +891,8 @@ EAX_API eax_result_t eax_prop_set(eax_context_h context, eax_buffer_h buffer, co
         const auto* p = static_cast<const eax10_reverb_properties_t*>(prop_data);
         eax20_listener_properties_t p20 = context->eax_listener;
         p20.dwEnvironment = p->dwEnvironment;
-        p20.flDecayTime = p->fDecayTime_sec;
+        const float decay_sec = p->fDecayTime_sec;
+        p20.flDecayTime = (std::isfinite(decay_sec) && decay_sec > 0.0f) ? std::clamp(decay_sec, 0.1f, 20.0f) : 1.49f;
         if (prop_id & 0x80000000u) {
             context->eax_listener_deferred = p20;
             context->eax_listener_has_deferred = true;
@@ -904,6 +907,8 @@ EAX_API eax_result_t eax_prop_set(eax_context_h context, eax_buffer_h buffer, co
         if (!buffer || prop_len < sizeof(float)) return EAX_ERR_INVALID_PARAM;
         float mix = 0.0f;
         std::memcpy(&mix, prop_data, sizeof(float));
+        if (!std::isfinite(mix)) mix = 0.0f;
+        mix = std::clamp(mix, 0.0f, 1.0f);
         buffer->eax10_mix.store(mix, std::memory_order_relaxed);
         return EAX_OK;
     }

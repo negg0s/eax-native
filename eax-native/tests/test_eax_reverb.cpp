@@ -99,3 +99,24 @@ TEST_CASE("EAX Reverb Tail: REVERB_CAVE Preset Extended Decay via OpenAL Soft", 
     REQUIRE(eax_buffer_destroy(buf) == EAX_OK);
     REQUIRE(eax_context_destroy(ctx) == EAX_OK);
 }
+
+TEST_CASE("Reverb: Boundary parameters and offline render resilience", "[reverb]") {
+    const uint32_t sample_rate = 44100;
+    eax_context_h ctx = nullptr;
+    REQUIRE(eax_context_create_offline(&ctx, sample_rate) == EAX_OK);
+
+    eax20_listener_properties_t props = eax::PRESET_GENERIC;
+    props.flDecayTime = -5.0f;
+    props.flDecayHFRatio = -1.0f;
+    props.flEnvironmentSize = -10.0f;
+    props.flEnvironmentDiffusion = -2.0f;
+    REQUIRE(eax_prop_set(ctx, nullptr, &eax::GUID_EAX20_Listener, 1, nullptr, 0, &props, sizeof(props)) == EAX_OK);
+
+    std::vector<float> pcm(sample_rate * 2, 0.0f);
+    REQUIRE(eax_context_render_offline(ctx, pcm.data(), sample_rate, sample_rate) == EAX_OK);
+    for (float sample : pcm) {
+        REQUIRE(std::isfinite(sample));
+    }
+
+    REQUIRE(eax_context_destroy(ctx) == EAX_OK);
+}

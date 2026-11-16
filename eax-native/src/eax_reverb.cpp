@@ -17,17 +17,19 @@ void ReverbDSP::configure(const eax20_listener_properties_t& props, uint32_t sam
     m_room_gain = mb_to_gain(props.lRoom);
     m_reverb_gain = mb_to_gain(props.lReverb);
     m_reflections_gain = mb_to_gain(props.lReflections);
-    m_decay_time = std::clamp(props.flDecayTime, 0.1f, 20.0f);
+    m_decay_time = (std::isfinite(props.flDecayTime) && props.flDecayTime > 0.0f) ? std::clamp(props.flDecayTime, 0.1f, 20.0f) : 1.49f;
 
     // Damping factor from decay HF ratio
-    const float damping = std::clamp(1.0f - (1.0f / (props.flDecayHFRatio > 0.0f ? props.flDecayHFRatio : 1.0f)), 0.0f, 0.9f);
+    const float decay_hf = (std::isfinite(props.flDecayHFRatio) && props.flDecayHFRatio > 0.0f) ? props.flDecayHFRatio : 0.83f;
+    const float damping = std::clamp(1.0f - (1.0f / decay_hf), 0.0f, 0.9f);
 
     // Feedback scalar based on decay time RT60:
     // RT60 = -3 * delay / log10(feedback) => feedback = 10^(-3 * delay / RT60)
     const float sr_scale = static_cast<float>(m_sample_rate) / 44100.0f;
 
     // Comb delays (in samples at 44.1kHz, scaled by environment size)
-    const float size_factor = std::clamp(props.flEnvironmentSize / 7.5f, 0.5f, 2.5f);
+    const float env_size = (std::isfinite(props.flEnvironmentSize) && props.flEnvironmentSize > 0.0f) ? props.flEnvironmentSize : 7.5f;
+    const float size_factor = std::clamp(env_size / 7.5f, 0.5f, 2.5f);
     const size_t delays_comb[4] = {
         static_cast<size_t>(1116 * sr_scale * size_factor),
         static_cast<size_t>(1188 * sr_scale * size_factor),
@@ -57,6 +59,9 @@ void ReverbDSP::configure(const eax20_listener_properties_t& props, uint32_t sam
 }
 
 void ReverbDSP::process(float input_mono, float& out_left, float& out_right) noexcept {
+    if (!std::isfinite(input_mono)) {
+        input_mono = 0.0f;
+    }
     if (m_room_gain <= 0.00001f || m_predelay_buffer.empty()) {
         out_left = 0.0f;
         out_right = 0.0f;
@@ -84,8 +89,10 @@ void ReverbDSP::process(float input_mono, float& out_left, float& out_right) noe
     const float wet = diffused * m_room_gain * m_reverb_gain;
     const float early = delayed_input * m_room_gain * m_reflections_gain;
 
-    out_left = early * 0.7f + wet;
-    out_right = early * 0.3f + wet * 0.95f; // subtle decorrelation
+    const float l = early * 0.7f + wet;
+    const float r = early * 0.3f + wet * 0.95f; // subtle decorrelation
+    out_left = std::isfinite(l) ? l : 0.0f;
+    out_right = std::isfinite(r) ? r : 0.0f;
 }
 
 void ReverbDSP::reset() noexcept {
